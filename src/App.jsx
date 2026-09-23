@@ -4,58 +4,102 @@ import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import Container from '@mui/material/Container'
-import Tabs from '@mui/material/Tabs'
-import Tab from '@mui/material/Tab'
 import Chip from '@mui/material/Chip'
 import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import Paper from '@mui/material/Paper'
+import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 
-function tabPanelId(index) {
-  return `watchlist-tabpanel-${index}`
+const ALL = '__all__'
+
+// 複数サービスに重複して載っている作品を movie_id で 1 件にまとめ、観られるサービス名を集める
+function buildUniqueMovies(tabs) {
+  const byId = tabs.reduce((acc, tab) => {
+    tab.movies.forEach((movie) => {
+      const found = acc.get(movie.movie_id)
+      acc.set(movie.movie_id, {
+        movie_id: movie.movie_id,
+        title: found?.title ?? movie.title,
+        services: [...(found?.services ?? []), tab.name],
+      })
+    })
+    return acc
+  }, new Map())
+  return [...byId.values()].sort((a, b) => a.title.localeCompare(b.title, 'ja'))
 }
 
-function tabId(index) {
-  return `watchlist-tab-${index}`
+function ServiceFilter({ options, selected, onSelect }) {
+  return (
+    <Box
+      role="group"
+      aria-label="配信サービスで絞り込み"
+      sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}
+    >
+      {options.map((option) => {
+        const isSelected = option.value === selected
+        return (
+          <Chip
+            key={option.value}
+            label={`${option.label} ${option.count}`}
+            clickable
+            onClick={() => onSelect(option.value)}
+            color={isSelected ? 'primary' : 'default'}
+            variant={isSelected ? 'filled' : 'outlined'}
+            aria-pressed={isSelected}
+          />
+        )
+      })}
+    </Box>
+  )
 }
 
-function MovieList({ movies, tabIndex }) {
-  const content =
-    movies.length === 0 ? (
+function MovieList({ movies, showServices, emptyMessage }) {
+  if (movies.length === 0) {
+    return (
       <Box sx={{ py: 4, textAlign: 'center' }}>
-        <Typography color="text.secondary">このタブに作品はありません</Typography>
+        <Typography color="text.secondary">{emptyMessage}</Typography>
       </Box>
-    ) : (
-      <List disablePadding>
-        {movies.map((movie) => (
-          <ListItemButton
-            key={movie.movie_id}
-            component="a"
-            href={`https://filmarks.com/movies/${movie.movie_id}`}
-            target="_blank"
-            rel="noopener"
-            divider
-          >
-            <ListItemText primary={movie.title} />
-          </ListItemButton>
-        ))}
-      </List>
     )
+  }
 
   return (
-    <Box role="tabpanel" id={tabPanelId(tabIndex)} aria-labelledby={tabId(tabIndex)}>
-      {content}
-    </Box>
+    <List disablePadding>
+      {movies.map((movie) => (
+        <ListItemButton
+          key={movie.movie_id}
+          component="a"
+          href={`https://filmarks.com/movies/${movie.movie_id}`}
+          target="_blank"
+          rel="noopener"
+          divider
+        >
+          <ListItemText
+            primary={movie.title}
+            secondary={
+              showServices ? (
+                <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                  {movie.services.map((service) => (
+                    <Chip key={service} component="span" size="small" variant="outlined" label={service} />
+                  ))}
+                </Box>
+              ) : null
+            }
+            slotProps={{ secondary: { component: 'div' } }}
+          />
+        </ListItemButton>
+      ))}
+    </List>
   )
 }
 
 export default function App() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
-  const [activeTab, setActiveTab] = useState(0)
+  const [selected, setSelected] = useState(ALL)
+  const [query, setQuery] = useState('')
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}watchlist.json`)
@@ -67,10 +111,34 @@ export default function App() {
       .catch((err) => setError(err.message))
   }, [])
 
-  const activeMovies = useMemo(() => {
+  const uniqueMovies = useMemo(() => (data ? buildUniqueMovies(data.tabs) : []), [data])
+
+  const options = useMemo(() => {
     if (!data) return []
-    return data.tabs[activeTab]?.movies ?? []
-  }, [data, activeTab])
+    return [
+      { value: ALL, label: 'すべて', count: uniqueMovies.length },
+      ...data.tabs.map((tab) => ({ value: tab.name, label: tab.name, count: tab.movies.length })),
+    ]
+  }, [data, uniqueMovies])
+
+  const isAll = selected === ALL
+  const selectedLabel = isAll ? 'すべて' : selected
+  const keyword = query.trim()
+
+  const visibleMovies = useMemo(() => {
+    if (!data) return []
+    const base = isAll ? uniqueMovies : (data.tabs.find((tab) => tab.name === selected)?.movies ?? [])
+    if (!keyword) return base
+    const needle = keyword.toLowerCase()
+    return base.filter((movie) => movie.title.toLowerCase().includes(needle))
+  }, [data, uniqueMovies, isAll, selected, keyword])
+
+  const heading = keyword
+    ? `${selectedLabel}から「${keyword}」を検索 ${visibleMovies.length}件`
+    : `${selectedLabel} ${visibleMovies.length}件`
+  const emptyMessage = keyword
+    ? `「${keyword}」に一致する作品はありません`
+    : 'このサービスに作品はありません'
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'grey.100' }}>
@@ -97,34 +165,28 @@ export default function App() {
               最終更新: {data.generated_at}
             </Typography>
 
-            <Paper variant="outlined">
-              <Tabs
-                value={activeTab}
-                onChange={(_, value) => setActiveTab(value)}
-                variant="scrollable"
-                scrollButtons="auto"
-                allowScrollButtonsMobile
-              >
-                {data.tabs.map((tab, index) => (
-                  <Tab
-                    key={tab.name}
-                    id={tabId(index)}
-                    aria-controls={tabPanelId(index)}
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {tab.name}
-                        <Chip
-                          size="small"
-                          label={tab.movies.length}
-                          color={activeTab === index ? 'primary' : 'default'}
-                        />
-                      </Box>
-                    }
-                  />
-                ))}
-              </Tabs>
+            <TextField
+              type="search"
+              label="タイトルで検索"
+              size="small"
+              fullWidth
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              sx={{ mb: 2, bgcolor: 'background.paper' }}
+            />
 
-              <MovieList movies={activeMovies} tabIndex={activeTab} />
+            <ServiceFilter options={options} selected={selected} onSelect={setSelected} />
+
+            <Paper variant="outlined">
+              <Typography
+                component="h2"
+                variant="subtitle1"
+                aria-live="polite"
+                sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider' }}
+              >
+                {heading}
+              </Typography>
+              <MovieList movies={visibleMovies} showServices={isAll} emptyMessage={emptyMessage} />
             </Paper>
           </>
         )}
