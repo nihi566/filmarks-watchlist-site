@@ -12,8 +12,27 @@ import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
+import Button from '@mui/material/Button'
 
 const ALL = '__all__'
+
+function loadError(kind, status) {
+  return Object.assign(new Error(kind), { kind, status })
+}
+
+// 例外の英語メッセージは画面に出さず、失敗の段階ごとに決めた日本語だけを表示する
+function loadErrorMessage(err) {
+  switch (err.kind) {
+    case 'http':
+      return `ウォッチリストを取得できませんでした（HTTP ${err.status}）。時間をおいて再試行してください。`
+    case 'network':
+      return 'サーバーに接続できませんでした。インターネット接続を確認して再試行してください。'
+    case 'parse':
+      return 'ウォッチリストのデータを読み取れませんでした。時間をおいて再試行してください。'
+    default:
+      return 'ウォッチリストを読み込めませんでした。時間をおいて再試行してください。'
+  }
+}
 
 // 複数サービスに重複して載っている作品を movie_id で 1 件にまとめ、観られるサービス名を集める
 function buildUniqueMovies(tabs) {
@@ -100,16 +119,36 @@ export default function App() {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(ALL)
   const [query, setQuery] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}watchlist.json`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`データの取得に失敗しました (HTTP ${res.status})`)
-        return res.json()
+    // 再試行を連打したとき、古いリクエストの結果で新しい状態を上書きしない
+    let active = true
+    fetch(`${import.meta.env.BASE_URL}watchlist.json`, { cache: 'no-cache' })
+      .catch(() => {
+        throw loadError('network')
       })
-      .then(setData)
-      .catch((err) => setError(err.message))
-  }, [])
+      .then((res) => {
+        if (!res.ok) throw loadError('http', res.status)
+        return res.json().catch(() => {
+          throw loadError('parse')
+        })
+      })
+      .then((json) => {
+        if (active) setData(json)
+      })
+      .catch((err) => {
+        if (active) setError(loadErrorMessage(err))
+      })
+    return () => {
+      active = false
+    }
+  }, [reloadKey])
+
+  const retry = () => {
+    setError(null)
+    setReloadKey((key) => key + 1)
+  }
 
   const uniqueMovies = useMemo(() => (data ? buildUniqueMovies(data.tabs) : []), [data])
 
@@ -151,7 +190,18 @@ export default function App() {
       </AppBar>
 
       <Container maxWidth="md" sx={{ py: 3 }}>
-        {error && <Alert severity="error">{error}</Alert>}
+        {error && (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" size="small" onClick={retry}>
+                再試行
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
+        )}
 
         {!data && !error && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
