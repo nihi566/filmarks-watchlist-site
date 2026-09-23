@@ -13,32 +13,42 @@ import ListItemText from '@mui/material/ListItemText'
 import Paper from '@mui/material/Paper'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
-import MovieIcon from '@mui/icons-material/Movie'
 
-function MovieList({ movies }) {
-  if (movies.length === 0) {
-    return (
+function tabPanelId(index) {
+  return `watchlist-tabpanel-${index}`
+}
+
+function tabId(index) {
+  return `watchlist-tab-${index}`
+}
+
+function MovieList({ movies, tabIndex }) {
+  const content =
+    movies.length === 0 ? (
       <Box sx={{ py: 4, textAlign: 'center' }}>
         <Typography color="text.secondary">このタブに作品はありません</Typography>
       </Box>
+    ) : (
+      <List disablePadding>
+        {movies.map((movie) => (
+          <ListItemButton
+            key={movie.movie_id}
+            component="a"
+            href={`https://filmarks.com/movies/${movie.movie_id}`}
+            target="_blank"
+            rel="noopener"
+            divider
+          >
+            <ListItemText primary={movie.title} />
+          </ListItemButton>
+        ))}
+      </List>
     )
-  }
 
   return (
-    <List disablePadding>
-      {movies.map((movie) => (
-        <ListItemButton
-          key={movie.movie_id}
-          component="a"
-          href={`https://filmarks.com/movies/${movie.movie_id}`}
-          target="_blank"
-          rel="noopener"
-          divider
-        >
-          <ListItemText primary={movie.title} />
-        </ListItemButton>
-      ))}
-    </List>
+    <Box role="tabpanel" id={tabPanelId(tabIndex)} aria-labelledby={tabId(tabIndex)}>
+      {content}
+    </Box>
   )
 }
 
@@ -66,7 +76,6 @@ export default function App() {
     <Box sx={{ minHeight: '100vh', bgcolor: 'grey.100' }}>
       <AppBar position="static" color="primary" enableColorOnDark>
         <Toolbar>
-          <MovieIcon sx={{ mr: 1 }} />
           <Typography variant="h6" component="h1" sx={{ flexGrow: 1 }}>
             Filmarks ウォッチリスト
           </Typography>
@@ -78,7 +87,7 @@ export default function App() {
 
         {!data && !error && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress />
+            <CircularProgress aria-label="ウォッチリストを読み込み中" />
           </Box>
         )}
 
@@ -88,7 +97,7 @@ export default function App() {
               最終更新: {data.generated_at}
             </Typography>
 
-            <Paper sx={{ mb: 2 }}>
+            <Paper variant="outlined">
               <Tabs
                 value={activeTab}
                 onChange={(_, value) => setActiveTab(value)}
@@ -99,8 +108,10 @@ export default function App() {
                 {data.tabs.map((tab, index) => (
                   <Tab
                     key={tab.name}
+                    id={tabId(index)}
+                    aria-controls={tabPanelId(index)}
                     label={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {tab.name}
                         <Chip
                           size="small"
@@ -112,10 +123,8 @@ export default function App() {
                   />
                 ))}
               </Tabs>
-            </Paper>
 
-            <Paper>
-              <MovieList movies={activeMovies} />
+              <MovieList movies={activeMovies} tabIndex={activeTab} />
             </Paper>
           </>
         )}
