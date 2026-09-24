@@ -22,6 +22,22 @@ function loadError(kind, status) {
   return Object.assign(new Error(kind), { kind, status })
 }
 
+// watchlist.json はこのリポジトリ外（scraper）が生成するため、形が想定外でも
+// 一覧描画（tabs.reduce / movie.title.localeCompare 等）が例外を投げて白画面に
+// ならないよう、取得直後の境界で構造を検証し title を文字列へ正規化する
+function normalizeWatchlist(json) {
+  if (!json || !Array.isArray(json.tabs)) throw loadError('parse')
+  return {
+    ...json,
+    tabs: json.tabs.map((tab) => ({
+      ...tab,
+      movies: Array.isArray(tab.movies)
+        ? tab.movies.map((movie) => ({ ...movie, title: String(movie?.title ?? '') }))
+        : [],
+    })),
+  }
+}
+
 // 例外の英語メッセージは画面に出さず、失敗の段階ごとに決めた日本語だけを表示する
 function loadErrorMessage(err) {
   switch (err.kind) {
@@ -147,8 +163,9 @@ export default function App() {
           throw loadError('parse')
         })
       })
-      .then((json) => {
-        if (active) setData(json)
+      .then((json) => normalizeWatchlist(json))
+      .then((normalized) => {
+        if (active) setData(normalized)
       })
       .catch((err) => {
         if (active) setError(loadErrorMessage(err))
