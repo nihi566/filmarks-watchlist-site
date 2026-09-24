@@ -13,6 +13,8 @@ import TextField from '@mui/material/TextField'
 import CircularProgress from '@mui/material/CircularProgress'
 import Alert from '@mui/material/Alert'
 import Button from '@mui/material/Button'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import { visuallyHidden } from '@mui/utils'
 
 const ALL = '__all__'
 
@@ -96,7 +98,18 @@ function MovieList({ movies, showServices, emptyMessage }) {
           divider
         >
           <ListItemText
-            primary={movie.title}
+            primary={
+              <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box component="span">{movie.title}</Box>
+                <OpenInNewIcon
+                  aria-hidden="true"
+                  sx={{ fontSize: '1em', color: 'text.secondary', flexShrink: 0 }}
+                />
+                <Box component="span" sx={visuallyHidden}>
+                  （新しいタブで開きます）
+                </Box>
+              </Box>
+            }
             secondary={
               showServices ? (
                 <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
