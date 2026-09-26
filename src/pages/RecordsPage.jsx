@@ -137,7 +137,8 @@ export default function RecordsPage({ records }) {
       await records.save(change)
       setNotice({ severity: 'success', text: `「${change.title}」の記録を元に戻しました` })
     } catch (err) {
-      setNotice({ severity: 'error', text: `元に戻せませんでした。${recordsErrorMessage(err)}` })
+      // 失敗しても復元する内容を捨てない（捨てると元の視聴日・視聴時間を取り戻せなくなる）
+      setNotice({ severity: 'error', text: `元に戻せませんでした。${recordsErrorMessage(err)}`, undo: change })
     }
   }
 
@@ -322,7 +323,7 @@ export default function RecordsPage({ records }) {
             action={
               notice.undo ? (
                 <Button color="inherit" size="small" onClick={() => undo(notice.undo)}>
-                  元に戻す
+                  {notice.severity === 'error' ? '再試行' : '元に戻す'}
                 </Button>
               ) : undefined
             }
