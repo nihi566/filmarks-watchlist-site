@@ -10,6 +10,7 @@ import CircularProgress from '@mui/material/CircularProgress'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemAvatar from '@mui/material/ListItemAvatar'
+import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import ListSubheader from '@mui/material/ListSubheader'
 import Avatar from '@mui/material/Avatar'
@@ -20,6 +21,8 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import MovieIcon from '@mui/icons-material/Movie'
+import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import { visuallyHidden } from '@mui/utils'
 import WatchDialog from '../components/WatchDialog.jsx'
 import { recordsErrorMessage } from '../records/github.js'
 import { todayLocal } from '../records/records.js'
@@ -247,6 +250,7 @@ export default function RecordsPage({ records }) {
                   {day.items.map((item) => (
                     <ListItem
                       key={item.movie_id}
+                      disablePadding
                       secondaryAction={
                         canEdit && (
                           <IconButton
@@ -259,6 +263,14 @@ export default function RecordsPage({ records }) {
                         )
                       }
                     >
+                      {/* 記録した作品の Filmarks ページ（レビューや Mark を付けに行く導線） */}
+                      <ListItemButton
+                        component="a"
+                        href={`https://filmarks.com/movies/${item.movie_id}`}
+                        target="_blank"
+                        rel="noopener"
+                        sx={{ pr: canEdit ? 7 : 2 }}
+                      >
                       <ListItemAvatar sx={{ minWidth: 44 }}>
                         <Avatar variant="rounded" src={item.image || undefined} alt="" sx={{ width: 30, height: 40, bgcolor: 'grey.200', color: 'grey.500' }}>
                           <MovieIcon fontSize="small" />
@@ -269,6 +281,11 @@ export default function RecordsPage({ records }) {
                         secondary={item.minutes != null ? formatMinutes(item.minutes) : '視聴時間不明'}
                         slotProps={{ primary: { variant: 'body2' } }}
                       />
+                      <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, ml: 1 }} />
+                      <Box component="span" sx={visuallyHidden}>
+                        （新しいタブで開きます）
+                      </Box>
+                      </ListItemButton>
                     </ListItem>
                   ))}
                 </List>
