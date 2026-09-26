@@ -109,3 +109,29 @@ describe('base64（UTF-8）', () => {
     expect(decodeBase64Utf8(wrapped)).toBe('あいうえお'.repeat(20))
   })
 })
+
+describe('todayLocal', () => {
+  it('端末のローカル日付を YYYY-MM-DD（ゼロ埋め）で返す', () => {
+    expect(todayLocal(new Date(2026, 0, 5, 0, 30))).toBe('2026-01-05')
+    expect(todayLocal(new Date(2026, 11, 31, 23, 59))).toBe('2026-12-31')
+  })
+})
+
+describe('excludeWatched', () => {
+  const tabs = [
+    { name: 'U-NEXT', movies: [{ movie_id: '1', title: 'A' }, { movie_id: '2', title: 'B' }] },
+    { name: 'Netflix', movies: [{ movie_id: '2', title: 'B' }] },
+  ]
+
+  it('見たの作品をすべてのグループから外し、空になったグループは消す', () => {
+    const result = excludeWatched(tabs, { 2: { title: 'B', watched_on: '2026-09-26' } })
+    expect(result).toEqual([{ name: 'U-NEXT', movies: [{ movie_id: '1', title: 'A' }] }])
+  })
+
+  it('記録が無ければそのまま返し、元の配列は変えない', () => {
+    expect(excludeWatched(tabs, {})).toEqual(tabs)
+    expect(excludeWatched(tabs, null)).toEqual(tabs)
+    excludeWatched(tabs, { 1: {} })
+    expect(tabs[0].movies).toHaveLength(2)
+  })
+})
