@@ -7,6 +7,7 @@ import InputAdornment from '@mui/material/InputAdornment'
 import Button from '@mui/material/Button'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import ListSubheader from '@mui/material/ListSubheader'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import List from '@mui/material/List'
@@ -31,6 +32,7 @@ import { visuallyHidden } from '@mui/utils'
 import { serviceIconUrl } from '../serviceIcons.js'
 import WatchDialog from '../components/WatchDialog.jsx'
 import { excludeWatched } from '../records/records.js'
+import { MOVIE_ORDERS, sortMovies } from '../movieOrder.js'
 import { recordsErrorMessage } from '../records/github.js'
 
 const UNAVAILABLE = '未配信'
@@ -293,6 +295,7 @@ export default function WatchlistPage({ searchRef, records }) {
   const [query, setQuery] = useState('')
   const [serviceFilter, setServiceFilter] = useState(null)
   const [sortKey, setSortKey] = useState('count')
+  const [movieOrder, setMovieOrder] = useState('title')
   // 同時に開けるグループは 1 つだけ（別のグループを開くと前のグループは閉じる）
   const [expandedName, setExpandedName] = useState(null)
   // 検索中は一致したグループを既定で開き、利用者が閉じたものだけを覚える
@@ -376,11 +379,13 @@ export default function WatchlistPage({ searchRef, records }) {
 
   const groups = useMemo(() => {
     const base = serviceFilter ? allGroups.filter((tab) => tab.name === serviceFilter) : allGroups
-    if (!searching) return base
-    return base
-      .map((tab) => ({ ...tab, movies: tab.movies.filter((movie) => matchesKeyword(movie.title, needle)) }))
-      .filter((tab) => tab.movies.length > 0)
-  }, [allGroups, serviceFilter, searching, needle])
+    const matched = searching
+      ? base
+          .map((tab) => ({ ...tab, movies: tab.movies.filter((movie) => matchesKeyword(movie.title, needle)) }))
+          .filter((tab) => tab.movies.length > 0)
+      : base
+    return matched.map((tab) => ({ ...tab, movies: sortMovies(tab.movies, movieOrder) }))
+  }, [allGroups, serviceFilter, searching, needle, movieOrder])
 
   const matchCount = groups.reduce((sum, tab) => sum + tab.movies.length, 0)
 
@@ -547,6 +552,7 @@ export default function WatchlistPage({ searchRef, records }) {
             open={Boolean(sortMenuAnchor)}
             onClose={() => setSortMenuAnchor(null)}
           >
+            <ListSubheader>サービスの並び</ListSubheader>
             {SORTS.map((sort) => (
               <MenuItem
                 key={sort.value}
@@ -558,6 +564,20 @@ export default function WatchlistPage({ searchRef, records }) {
               >
                 <ListItemIcon>{sort.value === sortKey && <CheckIcon fontSize="small" />}</ListItemIcon>
                 <ListItemText primary={sort.label} />
+              </MenuItem>
+            ))}
+            <ListSubheader>作品の並び</ListSubheader>
+            {MOVIE_ORDERS.map((order) => (
+              <MenuItem
+                key={order.value}
+                selected={order.value === movieOrder}
+                onClick={() => {
+                  setMovieOrder(order.value)
+                  setSortMenuAnchor(null)
+                }}
+              >
+                <ListItemIcon>{order.value === movieOrder && <CheckIcon fontSize="small" />}</ListItemIcon>
+                <ListItemText primary={order.label} />
               </MenuItem>
             ))}
           </Menu>
