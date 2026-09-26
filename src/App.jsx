@@ -18,6 +18,15 @@ import { visuallyHidden } from '@mui/utils'
 
 const ALL = '__all__'
 
+// 検索で ひらがな/カタカナ・全角/半角・大文字/小文字 の違いを区別しない
+// （NFKC で半角カナ→全角・全角英数→半角にそろえ、ひらがなをカタカナへ寄せる）
+function normalizeForSearch(text) {
+  return text
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[ぁ-ゖ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) + 0x60))
+}
+
 function loadError(kind, status) {
   return Object.assign(new Error(kind), { kind, status })
 }
@@ -198,8 +207,8 @@ export default function App() {
     if (!data) return []
     const base = isAll ? uniqueMovies : (data.tabs.find((tab) => tab.name === selected)?.movies ?? [])
     if (!keyword) return base
-    const needle = keyword.toLowerCase()
-    return base.filter((movie) => movie.title.toLowerCase().includes(needle))
+    const needle = normalizeForSearch(keyword)
+    return base.filter((movie) => normalizeForSearch(movie.title).includes(needle))
   }, [data, uniqueMovies, isAll, selected, keyword])
 
   const heading = keyword
