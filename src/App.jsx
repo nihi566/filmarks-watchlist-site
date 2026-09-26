@@ -23,7 +23,6 @@ import Alert from '@mui/material/Alert'
 import SearchIcon from '@mui/icons-material/Search'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
 import CheckIcon from '@mui/icons-material/Check'
 import MovieIcon from '@mui/icons-material/Movie'
 import BlockIcon from '@mui/icons-material/Block'
@@ -32,8 +31,6 @@ import { visuallyHidden } from '@mui/utils'
 import { serviceIconUrl } from './serviceIcons.js'
 
 const UNAVAILABLE = '未配信'
-const INITIAL_GROUPS = 12
-const INITIAL_MOVIES = 4
 const SORTS = [
   { value: 'count', label: '作品数の多い順' },
   { value: 'name', label: 'サービス名順' },
@@ -187,20 +184,7 @@ function MovieRow({ movie }) {
   )
 }
 
-function MoreButton({ onClick, hiddenLabel }) {
-  return (
-    <Button size="small" onClick={onClick} endIcon={<MoreHorizIcon />} sx={{ ml: 1, fontWeight: 700 }}>
-      もっと見る
-      <Box component="span" sx={visuallyHidden}>
-        {hiddenLabel}
-      </Box>
-    </Button>
-  )
-}
-
-function ServiceGroup({ group, expanded, onToggle, showAll, onShowAll, isFirst }) {
-  const movies = showAll ? group.movies : group.movies.slice(0, INITIAL_MOVIES)
-  const rest = group.movies.length - movies.length
+function ServiceGroup({ group, expanded, onToggle, isFirst }) {
   return (
     <Accordion
       disableGutters
@@ -214,8 +198,6 @@ function ServiceGroup({ group, expanded, onToggle, showAll, onShowAll, isFirst }
         borderTop: isFirst ? 0 : 1,
         borderColor: 'divider',
         '&::before': { display: 'none' },
-        // 開いているグループだけを独立した角丸カードとして浮かせ、閉じた行と主従を付ける
-        '&.Mui-expanded': { m: 1, border: 1, borderColor: 'divider', borderRadius: 3, boxShadow: 1 },
       }}
     >
       <AccordionSummary
@@ -230,11 +212,10 @@ function ServiceGroup({ group, expanded, onToggle, showAll, onShowAll, isFirst }
       </AccordionSummary>
       <AccordionDetails sx={{ p: 0, pb: 1 }}>
         <List disablePadding>
-          {movies.map((movie) => (
+          {group.movies.map((movie) => (
             <MovieRow key={movie.movie_id} movie={movie} />
           ))}
         </List>
-        {rest > 0 && <MoreButton onClick={onShowAll} hiddenLabel={`（${group.name}の残り${rest}件）`} />}
       </AccordionDetails>
     </Accordion>
   )
@@ -267,11 +248,10 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [serviceFilter, setServiceFilter] = useState(null)
   const [sortKey, setSortKey] = useState('count')
-  const [expanded, setExpanded] = useState(new Set())
+  // 同時に開けるグループは 1 つだけ（別のグループを開くと前のグループは閉じる）
+  const [expandedName, setExpandedName] = useState(null)
   // 検索中は一致したグループを既定で開き、利用者が閉じたものだけを覚える
   const [collapsedInSearch, setCollapsedInSearch] = useState(new Set())
-  const [showAllMovies, setShowAllMovies] = useState(new Set())
-  const [showAllGroups, setShowAllGroups] = useState(false)
   const [serviceMenuAnchor, setServiceMenuAnchor] = useState(null)
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
   const searchRef = useRef(null)
@@ -295,7 +275,7 @@ export default function App() {
         setData(normalized)
         // 初期表示は作品数が最も多いグループだけを開く
         const first = sortGroups(normalized.tabs, 'count')[0]
-        setExpanded(new Set(first ? [first.name] : []))
+        setExpandedName(first ? first.name : null)
       })
       .catch((err) => {
         if (active) setError(loadErrorMessage(err))
@@ -325,15 +305,12 @@ export default function App() {
       .filter((tab) => tab.movies.length > 0)
   }, [allGroups, serviceFilter, searching, needle])
 
-  const groupLimit = searching || serviceFilter || showAllGroups ? groups.length : INITIAL_GROUPS
-  const visibleGroups = groups.slice(0, groupLimit)
-  const hiddenGroupCount = groups.length - visibleGroups.length
   const matchCount = groups.reduce((sum, tab) => sum + tab.movies.length, 0)
 
-  const isExpanded = (name) => (searching ? !collapsedInSearch.has(name) : expanded.has(name))
+  const isExpanded = (name) => (searching ? !collapsedInSearch.has(name) : expandedName === name)
   const toggleGroup = (name) => {
     if (searching) setCollapsedInSearch((set) => toggled(set, name))
-    else setExpanded((set) => toggled(set, name))
+    else setExpandedName((current) => (current === name ? null : name))
   }
 
   const onQueryChange = (event) => {
@@ -343,7 +320,7 @@ export default function App() {
 
   const selectService = (name) => {
     setServiceFilter(name)
-    if (name) setExpanded((set) => new Set(set).add(name))
+    if (name) setExpandedName(name)
     setServiceMenuAnchor(null)
   }
 
@@ -491,32 +468,22 @@ export default function App() {
             </Box>
 
             <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden', bgcolor: 'grey.50' }}>
-              {visibleGroups.length === 0 ? (
+              {groups.length === 0 ? (
                 <Box sx={{ py: 4, textAlign: 'center' }}>
                   <Typography color="text.secondary">
                     {searching ? `「${keyword}」に一致する作品はありません` : '表示できる作品はありません'}
                   </Typography>
                 </Box>
               ) : (
-                visibleGroups.map((group, index) => (
+                groups.map((group, index) => (
                   <ServiceGroup
                     key={group.name}
                     group={group}
                     isFirst={index === 0}
                     expanded={isExpanded(group.name)}
                     onToggle={() => toggleGroup(group.name)}
-                    showAll={searching || showAllMovies.has(group.name)}
-                    onShowAll={() => setShowAllMovies((set) => new Set(set).add(group.name))}
                   />
                 ))
-              )}
-              {hiddenGroupCount > 0 && (
-                <Box sx={{ borderTop: 1, borderColor: 'divider', py: 0.5, bgcolor: 'background.paper' }}>
-                  <MoreButton
-                    onClick={() => setShowAllGroups(true)}
-                    hiddenLabel={`（残り${hiddenGroupCount}サービス）`}
-                  />
-                </Box>
               )}
             </Paper>
           </>
