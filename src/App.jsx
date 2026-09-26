@@ -92,7 +92,7 @@ export default function App() {
 
       <AppMenu open={menuOpen} onClose={() => setMenuOpen(false)} currentPage={page} />
 
-      {page === 'watchlist' && <WatchlistPage searchRef={searchRef} />}
+      {page === 'watchlist' && <WatchlistPage searchRef={searchRef} records={records} />}
       {page === 'records' && <RecordsPage records={records} />}
       {page === 'settings' && <SettingsPage token={token} onSaveToken={saveToken} onClearToken={removeToken} />}
     </Box>
