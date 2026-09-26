@@ -19,6 +19,11 @@ export default function SettingsPage({ token, onSaveToken, onClearToken }) {
     event.preventDefault()
     const value = input.trim()
     if (!value) return
+    // 全角文字などが混じると通信時に例外になり「接続できない」と誤って表示されるため、保存前に弾く
+    if (!/^[\x21-\x7E]+$/.test(value)) {
+      setResult({ severity: 'error', text: 'トークンに使えない文字（全角文字や空白）が含まれています。貼り付け直してください。' })
+      return
+    }
     if (onSaveToken(value)) {
       setInput('')
       setResult({ severity: 'success', text: 'トークンを保存しました。「接続を確認」で使えるか確かめられます。' })
