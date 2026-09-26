@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
@@ -100,6 +100,22 @@ function sortGroups(tabs, sortKey) {
   })
 }
 
+// 押した行が一覧から消えるとフォーカスが body（ページ先頭）へ落ちるので、近くの要素へ移すための目印
+const watchButtonSelector = (movieId) => `[data-watch-id="${CSS.escape(movieId)}"]`
+const groupSummarySelector = (name) => `[data-group-summary="${CSS.escape(name)}"]`
+
+// 候補を先頭から試し、画面にあって押せる最初の要素へフォーカスする
+function focusFirst(selectors) {
+  for (const selector of selectors) {
+    const element = selector ? document.querySelector(selector) : null
+    if (element && !element.disabled) {
+      element.focus()
+      return true
+    }
+  }
+  return false
+}
+
 function matchesKeyword(title, needle) {
   return title.toLowerCase().includes(needle)
 }
@@ -169,6 +185,7 @@ function MovieRow({ movie, onWatch, canWatch }) {
           startIcon={<CheckCircleOutlineIcon />}
           onClick={() => onWatch(movie)}
           disabled={!canWatch}
+          data-watch-id={movie.movie_id}
           aria-label={`「${movie.title}」を見たに記録`}
           sx={{ borderRadius: 999, minWidth: 0, px: 1.25, whiteSpace: 'nowrap' }}
         >
@@ -224,6 +241,7 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
     >
       <AccordionSummary
         expandIcon={<ExpandMoreIcon />}
+        data-group-summary={group.name}
         sx={{ minHeight: 56, px: 2, '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1.5, my: 1 } }}
       >
         <ServiceIcon name={group.name} size={28} />
@@ -235,7 +253,12 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
       <AccordionDetails sx={{ p: 0, pb: 1 }}>
         <List disablePadding>
           {group.movies.map((movie) => (
-            <MovieRow key={movie.movie_id} movie={movie} onWatch={onWatch} canWatch={canWatch} />
+            <MovieRow
+              key={movie.movie_id}
+              movie={movie}
+              onWatch={(target) => onWatch(target, group)}
+              canWatch={canWatch}
+            />
           ))}
         </List>
       </AccordionDetails>
@@ -279,6 +302,33 @@ export default function WatchlistPage({ searchRef, records }) {
   // 「見た」に記録しようとしている作品と、記録後の通知（元に戻す用の作品を持つ）
   const [watchTarget, setWatchTarget] = useState(null)
   const [notice, setNotice] = useState(null)
+  // 見たに記録した作品の行が消えた後のフォーカスの移し先（同じグループの次・前の作品 → グループ見出し）
+  const returnFocus = useRef([])
+  const undoButton = useRef(null)
+  const noticeRoot = useRef(null)
+  // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
+  const restoreOnExit = useRef(false)
+  const [focusRequest, setFocusRequest] = useState(null)
+
+  // 一覧の描き直しが終わってから移す（元に戻した作品の行は、記録の更新を描いた後にしか無い）
+  useEffect(() => {
+    if (!focusRequest) return
+    if (!focusFirst(focusRequest)) searchRef.current?.focus()
+    setFocusRequest(null)
+  }, [focusRequest, searchRef])
+
+  // 保存直後は「元に戻す」へ移す（フォーカス中は Snackbar が自動で閉じない）。通知が開いたまま
+  // 次の作品を保存して中身だけ入れ替わる場合もあるので、開閉のアニメーションではなく通知の変化で移す
+  useEffect(() => {
+    if (!notice?.undo) return
+    const frame = requestAnimationFrame(() => undoButton.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [notice])
+
+  const closeNotice = () => {
+    restoreOnExit.current = Boolean(noticeRoot.current?.contains(document.activeElement))
+    setNotice(null)
+  }
 
   useEffect(() => {
     // 再試行を連打したとき、古いリクエストの結果で新しい状態を上書きしない
@@ -357,16 +407,30 @@ export default function WatchlistPage({ searchRef, records }) {
       ? `${serviceFilter} ${matchCount}件`
       : ''
 
+  const startWatch = (movie, group) => {
+    const index = group.movies.findIndex((item) => item.movie_id === movie.movie_id)
+    const next = group.movies[index + 1]
+    const prev = group.movies[index - 1]
+    returnFocus.current = [
+      next && watchButtonSelector(next.movie_id),
+      prev && watchButtonSelector(prev.movie_id),
+      groupSummarySelector(group.name),
+    ]
+    setWatchTarget(movie)
+  }
+
   const onWatched = () => {
     setNotice({ severity: 'success', text: `「${watchTarget.title}」を見たに記録しました`, undo: watchTarget })
     setWatchTarget(null)
   }
 
   const undoWatch = async (movie) => {
-    setNotice(null)
+    closeNotice()
     try {
       await records.save({ type: 'unwatch', movie_id: movie.movie_id })
       setNotice({ severity: 'info', text: `「${movie.title}」を見たいに戻しました` })
+      // 一覧に戻ってきた作品の「見た」ボタンへ戻す
+      setFocusRequest([watchButtonSelector(movie.movie_id), ...returnFocus.current])
     } catch (err) {
       setNotice({ severity: 'error', text: `元に戻せませんでした。${recordsErrorMessage(err)}` })
     }
@@ -517,7 +581,7 @@ export default function WatchlistPage({ searchRef, records }) {
                   isFirst={index === 0}
                   expanded={isExpanded(group.name)}
                   onToggle={() => toggleGroup(group.name)}
-                  onWatch={setWatchTarget}
+                  onWatch={startWatch}
                   // 記録を読み終えるまで押せなくする（読込前・失敗中に記録済みの作品を上書き→元に戻すで消す事故を防ぐ）
                   canWatch={records.status === 'ready'}
                 />
@@ -539,21 +603,32 @@ export default function WatchlistPage({ searchRef, records }) {
       )}
 
       <Snackbar
+        ref={noticeRoot}
         open={Boolean(notice)}
         autoHideDuration={notice?.severity === 'error' ? null : 8000}
         onClose={(_, reason) => {
-          if (reason !== 'clickaway') setNotice(null)
+          if (reason !== 'clickaway') closeNotice()
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        slotProps={{
+          transition: {
+            // 通知の中にあったフォーカスが閉じて行き場を失ったら、消えた作品の近くへ戻す
+            onExited: () => {
+              const lost = !document.activeElement || document.activeElement === document.body
+              if (restoreOnExit.current && lost) setFocusRequest(returnFocus.current)
+              restoreOnExit.current = false
+            },
+          },
+        }}
       >
         {notice ? (
           <Alert
             severity={notice.severity}
             variant="filled"
-            onClose={() => setNotice(null)}
+            onClose={closeNotice}
             action={
               notice.undo ? (
-                <Button color="inherit" size="small" onClick={() => undoWatch(notice.undo)}>
+                <Button ref={undoButton} color="inherit" size="small" onClick={() => undoWatch(notice.undo)}>
                   元に戻す
                 </Button>
               ) : undefined
