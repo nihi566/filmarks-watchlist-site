@@ -158,7 +158,7 @@ function Thumbnail({ src }) {
 }
 
 // 行本体は Filmarks へのリンク、右端の「見た」ボタンはリンクの外（secondaryAction）に置く
-function MovieRow({ movie, onWatch }) {
+function MovieRow({ movie, onWatch, canWatch }) {
   return (
     <ListItem
       disablePadding
@@ -168,6 +168,7 @@ function MovieRow({ movie, onWatch }) {
           variant="outlined"
           startIcon={<CheckCircleOutlineIcon />}
           onClick={() => onWatch(movie)}
+          disabled={!canWatch}
           aria-label={`「${movie.title}」を見たに記録`}
           sx={{ borderRadius: 999, minWidth: 0, px: 1.25, whiteSpace: 'nowrap' }}
         >
@@ -205,7 +206,7 @@ function MovieRow({ movie, onWatch }) {
   )
 }
 
-function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch }) {
+function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch }) {
   return (
     <Accordion
       disableGutters
@@ -234,7 +235,7 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch }) {
       <AccordionDetails sx={{ p: 0, pb: 1 }}>
         <List disablePadding>
           {group.movies.map((movie) => (
-            <MovieRow key={movie.movie_id} movie={movie} onWatch={onWatch} />
+            <MovieRow key={movie.movie_id} movie={movie} onWatch={onWatch} canWatch={canWatch} />
           ))}
         </List>
       </AccordionDetails>
@@ -517,6 +518,8 @@ export default function WatchlistPage({ searchRef, records }) {
                   expanded={isExpanded(group.name)}
                   onToggle={() => toggleGroup(group.name)}
                   onWatch={setWatchTarget}
+                  // 記録を読み終えるまで押せなくする（読込前・失敗中に記録済みの作品を上書き→元に戻すで消す事故を防ぐ）
+                  canWatch={records.status === 'ready'}
                 />
               ))
             )}
