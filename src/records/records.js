@@ -90,3 +90,17 @@ export function decodeBase64Utf8(base64) {
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
   return new TextDecoder().decode(bytes)
 }
+
+// 端末のローカル日付（日本時間の朝 9 時前に前日にならないよう UTC を使わない）
+export function todayLocal(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+// 「見た」の作品をウォッチリストの各グループから外す。全作品が外れたグループは表示しない
+export function excludeWatched(tabs, records) {
+  if (!records || Object.keys(records).length === 0) return tabs
+  return tabs
+    .map((tab) => ({ ...tab, movies: tab.movies.filter((movie) => !(movie.movie_id in records)) }))
+    .filter((tab) => tab.movies.length > 0)
+}
