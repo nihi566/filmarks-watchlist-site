@@ -7,8 +7,11 @@ import App from './App.jsx'
 const theme = createTheme({
   palette: {
     mode: 'light',
-    primary: { main: '#1a5fb4' },
+    primary: { main: '#1a6fe0' },
+    header: { main: '#1c2b4a', contrastText: '#fff' },
+    background: { default: '#f5f7fa' },
   },
+  shape: { borderRadius: 8 },
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(
