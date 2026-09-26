@@ -19,11 +19,15 @@ function parseMinutes(text) {
   return Number.isInteger(value) && value >= 0 ? { ok: true, value } : { ok: false }
 }
 
-// 「見た」に記録するダイアログ。保存に成功したときだけ onSaved を呼ぶ（失敗時は理由を出して閉じない）
-export default function WatchDialog({ movie, canWrite, onSave, onSaved, onClose }) {
+// 「見た」に記録するダイアログ。保存に成功したときだけ onSaved を呼ぶ（失敗時は理由を出して閉じない）。
+// initial を渡すと既存の記録の編集になる（視聴日・視聴時間の初期値を記録から取る）
+export default function WatchDialog({ movie, initial, title = '見たに記録', canWrite, onSave, onSaved, onClose }) {
   const today = todayLocal()
-  const [watchedOn, setWatchedOn] = useState(today)
-  const [minutesText, setMinutesText] = useState(movie.runtime_min ? String(movie.runtime_min) : '')
+  const [watchedOn, setWatchedOn] = useState(initial?.watched_on ?? today)
+  const [minutesText, setMinutesText] = useState(() => {
+    const value = initial ? initial.minutes : movie.runtime_min
+    return value != null ? String(value) : ''
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
@@ -60,7 +64,7 @@ export default function WatchDialog({ movie, canWrite, onSave, onSaved, onClose 
   return (
     <Dialog open onClose={close} fullWidth maxWidth="xs">
       <Box component="form" onSubmit={submit} noValidate>
-        <DialogTitle>見たに記録</DialogTitle>
+        <DialogTitle>{title}</DialogTitle>
         <DialogContent sx={{ display: 'grid', gap: 2 }}>
           <Typography sx={{ fontWeight: 700 }}>{movie.title}</Typography>
           {canWrite ? (
@@ -83,7 +87,7 @@ export default function WatchDialog({ movie, canWrite, onSave, onSaved, onClose 
                 value={minutesText}
                 onChange={(event) => setMinutesText(event.target.value)}
                 error={Boolean(minutesError)}
-                helperText={minutesError || (movie.runtime_min ? '上映時間を入れています。途中までなら書き換えてください' : '分からなければ空欄のままで構いません')}
+                helperText={minutesError || (!initial && movie.runtime_min ? '上映時間を入れています。途中までなら書き換えてください' : '分からなければ空欄のままで構いません')}
                 disabled={saving}
                 slotProps={{
                   htmlInput: { min: 0, step: 1, inputMode: 'numeric' },
