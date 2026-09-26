@@ -10,7 +10,9 @@ import MenuItem from '@mui/material/MenuItem'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import List from '@mui/material/List'
+import ListItem from '@mui/material/ListItem'
 import ListItemButton from '@mui/material/ListItemButton'
+import Snackbar from '@mui/material/Snackbar'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
@@ -24,8 +26,12 @@ import CheckIcon from '@mui/icons-material/Check'
 import MovieIcon from '@mui/icons-material/Movie'
 import BlockIcon from '@mui/icons-material/Block'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { visuallyHidden } from '@mui/utils'
 import { serviceIconUrl } from '../serviceIcons.js'
+import WatchDialog from '../components/WatchDialog.jsx'
+import { excludeWatched } from '../records/records.js'
+import { recordsErrorMessage } from '../records/github.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
@@ -151,14 +157,31 @@ function Thumbnail({ src }) {
   )
 }
 
-function MovieRow({ movie }) {
+// 行本体は Filmarks へのリンク、右端の「見た」ボタンはリンクの外（secondaryAction）に置く
+function MovieRow({ movie, onWatch }) {
   return (
+    <ListItem
+      disablePadding
+      secondaryAction={
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<CheckCircleOutlineIcon />}
+          onClick={() => onWatch(movie)}
+          aria-label={`「${movie.title}」を見たに記録`}
+          sx={{ borderRadius: 999, minWidth: 0, px: 1.25, whiteSpace: 'nowrap' }}
+        >
+          見た
+        </Button>
+      }
+      sx={{ '& .MuiListItemSecondaryAction-root': { right: 12 } }}
+    >
     <ListItemButton
       component="a"
       href={`https://filmarks.com/movies/${movie.movie_id}`}
       target="_blank"
       rel="noopener"
-      sx={{ gap: 1.5, py: 0.5, px: 2 }}
+      sx={{ gap: 1.5, py: 0.5, pl: 2, pr: '92px !important' }}
     >
       <Thumbnail src={movie.image} />
       <Typography
@@ -178,10 +201,11 @@ function MovieRow({ movie }) {
         （新しいタブで開きます）
       </Box>
     </ListItemButton>
+    </ListItem>
   )
 }
 
-function ServiceGroup({ group, expanded, onToggle, isFirst }) {
+function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch }) {
   return (
     <Accordion
       disableGutters
@@ -210,7 +234,7 @@ function ServiceGroup({ group, expanded, onToggle, isFirst }) {
       <AccordionDetails sx={{ p: 0, pb: 1 }}>
         <List disablePadding>
           {group.movies.map((movie) => (
-            <MovieRow key={movie.movie_id} movie={movie} />
+            <MovieRow key={movie.movie_id} movie={movie} onWatch={onWatch} />
           ))}
         </List>
       </AccordionDetails>
@@ -238,7 +262,7 @@ function FilterButton({ selected, children, ...props }) {
   )
 }
 
-export default function WatchlistPage({ searchRef }) {
+export default function WatchlistPage({ searchRef, records }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -251,6 +275,9 @@ export default function WatchlistPage({ searchRef }) {
   const [collapsedInSearch, setCollapsedInSearch] = useState(new Set())
   const [serviceMenuAnchor, setServiceMenuAnchor] = useState(null)
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
+  // 「見た」に記録しようとしている作品と、記録後の通知（元に戻す用の作品を持つ）
+  const [watchTarget, setWatchTarget] = useState(null)
+  const [notice, setNotice] = useState(null)
 
   useEffect(() => {
     // 再試行を連打したとき、古いリクエストの結果で新しい状態を上書きしない
@@ -290,8 +317,11 @@ export default function WatchlistPage({ searchRef }) {
   const needle = keyword.toLowerCase()
   const searching = needle !== ''
 
-  const uniqueCount = useMemo(() => (data ? countUniqueMovies(data.tabs) : 0), [data])
-  const allGroups = useMemo(() => (data ? sortGroups(data.tabs, sortKey) : []), [data, sortKey])
+  // 「見た」の作品は一覧・検索・件数のすべてから外す（記録の読込前・失敗時は全件）
+  const watched = records.file?.records
+  const visibleTabs = useMemo(() => (data ? excludeWatched(data.tabs, watched) : []), [data, watched])
+  const uniqueCount = useMemo(() => countUniqueMovies(visibleTabs), [visibleTabs])
+  const allGroups = useMemo(() => sortGroups(visibleTabs, sortKey), [visibleTabs, sortKey])
 
   const groups = useMemo(() => {
     const base = serviceFilter ? allGroups.filter((tab) => tab.name === serviceFilter) : allGroups
@@ -326,8 +356,36 @@ export default function WatchlistPage({ searchRef }) {
       ? `${serviceFilter} ${matchCount}件`
       : ''
 
+  const onWatched = () => {
+    setNotice({ severity: 'success', text: `「${watchTarget.title}」を見たに記録しました`, undo: watchTarget })
+    setWatchTarget(null)
+  }
+
+  const undoWatch = async (movie) => {
+    setNotice(null)
+    try {
+      await records.save({ type: 'unwatch', movie_id: movie.movie_id })
+      setNotice({ severity: 'info', text: `「${movie.title}」を見たいに戻しました` })
+    } catch (err) {
+      setNotice({ severity: 'error', text: `元に戻せませんでした。${recordsErrorMessage(err)}` })
+    }
+  }
+
   return (
     <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4 }}>
+      {records.status === 'error' && (
+        <Alert
+          severity="warning"
+          action={
+            <Button color="inherit" size="small" onClick={records.reload}>
+              再試行
+            </Button>
+          }
+          sx={{ mb: 1.5 }}
+        >
+          視聴記録を読み込めなかったため、見た作品も表示しています。{recordsErrorMessage(records.error)}
+        </Alert>
+      )}
       {error && (
         <Alert
           severity="error"
@@ -458,12 +516,51 @@ export default function WatchlistPage({ searchRef }) {
                   isFirst={index === 0}
                   expanded={isExpanded(group.name)}
                   onToggle={() => toggleGroup(group.name)}
+                  onWatch={setWatchTarget}
                 />
               ))
             )}
           </Paper>
         </>
       )}
+
+      {watchTarget && (
+        <WatchDialog
+          key={watchTarget.movie_id}
+          movie={watchTarget}
+          canWrite={records.canWrite}
+          onSave={records.save}
+          onSaved={onWatched}
+          onClose={() => setWatchTarget(null)}
+        />
+      )}
+
+      <Snackbar
+        open={Boolean(notice)}
+        autoHideDuration={notice?.severity === 'error' ? null : 8000}
+        onClose={(_, reason) => {
+          if (reason !== 'clickaway') setNotice(null)
+        }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        {notice ? (
+          <Alert
+            severity={notice.severity}
+            variant="filled"
+            onClose={() => setNotice(null)}
+            action={
+              notice.undo ? (
+                <Button color="inherit" size="small" onClick={() => undoWatch(notice.undo)}>
+                  元に戻す
+                </Button>
+              ) : undefined
+            }
+            sx={{ width: '100%' }}
+          >
+            {notice.text}
+          </Alert>
+        ) : undefined}
+      </Snackbar>
     </Box>
   )
 }
