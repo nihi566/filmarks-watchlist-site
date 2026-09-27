@@ -9,32 +9,82 @@ import Typography from '@mui/material/Typography'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import InputAdornment from '@mui/material/InputAdornment'
+import Rating from '@mui/material/Rating'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import FormControl from '@mui/material/FormControl'
+import FormLabel from '@mui/material/FormLabel'
+import FormHelperText from '@mui/material/FormHelperText'
 import { recordsErrorMessage } from '../records/github.js'
-import { isValidDate, todayLocal } from '../records/records.js'
+import { animeMinutes, isValidDate, todayLocal } from '../records/records.js'
+import { KINDS, RATING_LABELS } from '../records/kinds.js'
+import { formatMinutes } from '../records/summary.js'
 
-// 空欄は「視聴時間不明」として null で保存する
-function parseMinutes(text) {
+// 空欄は「不明」として null で保存する
+function parseCount(text, min) {
   if (text.trim() === '') return { ok: true, value: null }
   const value = Number(text)
-  return Number.isInteger(value) && value >= 0 ? { ok: true, value } : { ok: false }
+  return Number.isInteger(value) && value >= min ? { ok: true, value } : { ok: false }
 }
 
+function numberText(value) {
+  return value != null ? String(value) : ''
+}
+
+function ratingText(value) {
+  return value ? `★${value}（${RATING_LABELS[value]}）` : '未評価'
+}
+
+const numberInput = (unit) => ({
+  htmlInput: { min: 0, step: 1, inputMode: 'numeric' },
+  input: { endAdornment: <InputAdornment position="end">{unit}</InputAdornment> },
+})
+
 // 「見た」に記録するダイアログ。保存に成功したときだけ onSaved を呼ぶ（失敗時は理由を出して閉じない）。
-// initial を渡すと既存の記録の編集になる（視聴日・視聴時間の初期値を記録から取る）
-export default function WatchDialog({ movie, initial, title = '見たに記録', canWrite, onSave, onSaved, onClose }) {
+// initial を渡すと既存の記録の編集になる（各欄の初期値を記録から取る）。
+// editableTitle はウォッチリストに無い作品（テレビアニメなど）を手で追加するときに使い、タイトルも入力させる。
+// defaultKind は最初に選んでおく種類、kindNote はその種類のまま変えていないときに出す補足
+export default function WatchDialog({
+  movie,
+  initial,
+  title = '見たに記録',
+  editableTitle = false,
+  defaultKind = null,
+  kindNote = '',
+  canWrite,
+  onSave,
+  onSaved,
+  onClose,
+}) {
   const today = todayLocal()
+  // 映画は上映時間、記録の編集は記録した時間を初期値にする（アニメへ切り替えたときは 1 話ぶんとして使う）
+  const baseMinutes = initial ? initial.minutes : movie.runtime_min
+  const [titleText, setTitleText] = useState(movie.title ?? '')
+  const [kind, setKind] = useState(initial?.kind ?? defaultKind)
+  const [rating, setRating] = useState(initial?.rating ?? null)
+  const [hoverRating, setHoverRating] = useState(-1)
   const [watchedOn, setWatchedOn] = useState(initial?.watched_on ?? today)
-  const [minutesText, setMinutesText] = useState(() => {
-    const value = initial ? initial.minutes : movie.runtime_min
-    return value != null ? String(value) : ''
-  })
+  const [minutesText, setMinutesText] = useState(numberText(baseMinutes))
+  // テレビアニメは 1 クール（12 話・1 話 24 分）を初期値にする。上映時間が分かる劇場アニメは 1 話ぶんとして扱う
+  const [episodesText, setEpisodesText] = useState(numberText(initial?.episodes ?? (baseMinutes != null ? 1 : 12)))
+  const [episodeMinutesText, setEpisodeMinutesText] = useState(numberText(initial?.episode_minutes ?? baseMinutes ?? 24))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  const minutes = parseMinutes(minutesText)
+  const isAnime = kind === 'anime'
+  const trimmedTitle = titleText.trim()
+  const minutes = parseCount(minutesText, 0)
+  const episodes = parseCount(episodesText, 1)
+  const episodeMinutes = parseCount(episodeMinutesText, 0)
+  const totalMinutes = isAnime ? animeMinutes(episodes.value, episodeMinutes.value) : minutes.value
+
+  const titleError = editableTitle && !trimmedTitle ? 'タイトルを入力してください' : ''
   const dateError = !isValidDate(watchedOn) ? '日付を入力してください' : watchedOn > today ? '未来の日付は選べません' : ''
-  const minutesError = minutes.ok ? '' : '0 以上の整数（分）で入力してください'
-  const canSubmit = canWrite && !saving && !dateError && !minutesError
+  const minutesError = !isAnime && !minutes.ok ? '0 以上の整数（分）で入力してください' : ''
+  const episodesError = isAnime && !episodes.ok ? '1 以上の整数で入力してください' : ''
+  const episodeMinutesError = isAnime && !episodeMinutes.ok ? '0 以上の整数（分）で入力してください' : ''
+  const canSubmit =
+    canWrite && !saving && kind && !titleError && !dateError && !minutesError && !episodesError && !episodeMinutesError
 
   const close = () => {
     if (!saving) onClose()
@@ -45,30 +95,108 @@ export default function WatchDialog({ movie, initial, title = '見たに記録',
     if (!canSubmit) return
     setSaving(true)
     setError('')
+    const change = {
+      type: 'watch',
+      movie_id: movie.movie_id,
+      title: editableTitle ? trimmedTitle : movie.title,
+      image: movie.image ?? '',
+      watched_on: watchedOn,
+      minutes: totalMinutes,
+      rating,
+      kind,
+      episodes: isAnime ? episodes.value : null,
+      episode_minutes: isAnime ? episodeMinutes.value : null,
+    }
     try {
-      await onSave({
-        type: 'watch',
-        movie_id: movie.movie_id,
-        title: movie.title,
-        image: movie.image ?? '',
-        watched_on: watchedOn,
-        minutes: minutes.value,
-      })
-      onSaved()
+      await onSave(change)
+      onSaved(change)
     } catch (err) {
       setError(recordsErrorMessage(err))
       setSaving(false)
     }
   }
 
+  const shownRating = hoverRating > 0 ? hoverRating : rating
+
   return (
     <Dialog open onClose={close} fullWidth maxWidth="xs">
       <Box component="form" onSubmit={submit} noValidate>
         <DialogTitle>{title}</DialogTitle>
         <DialogContent sx={{ display: 'grid', gap: 2 }}>
-          <Typography sx={{ fontWeight: 700 }}>{movie.title}</Typography>
+          {editableTitle ? (
+            <TextField
+              label="タイトル"
+              size="small"
+              required
+              value={titleText}
+              onChange={(event) => setTitleText(event.target.value)}
+              helperText="ウォッチリストに無い作品（テレビアニメなど）を記録できます"
+              disabled={saving || !canWrite}
+              sx={{ mt: 1 }}
+            />
+          ) : (
+            <Typography sx={{ fontWeight: 700 }}>{movie.title}</Typography>
+          )}
           {canWrite ? (
             <>
+              <FormControl>
+                <FormLabel id="watch-kind-label" sx={{ fontSize: 13, mb: 0.5 }}>
+                  種類
+                </FormLabel>
+                <ToggleButtonGroup
+                  exclusive
+                  fullWidth
+                  size="small"
+                  color="primary"
+                  value={kind}
+                  onChange={(_, value) => {
+                    if (value) setKind(value)
+                  }}
+                  aria-labelledby="watch-kind-label"
+                  disabled={saving}
+                >
+                  {KINDS.map((item) => (
+                    <ToggleButton key={item.value} value={item.value} sx={{ fontWeight: 700 }}>
+                      {item.label}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+                <FormHelperText sx={{ mx: 0 }}>
+                  {!kind
+                    ? 'アニメ・邦画・洋画から選んでください'
+                    : kindNote && !initial && kind === defaultKind
+                      ? kindNote
+                      : 'アニメは話数で、邦画・洋画は時間で記録します'}
+                </FormHelperText>
+              </FormControl>
+
+              <FormControl>
+                <FormLabel id="watch-rating-label" sx={{ fontSize: 13, mb: 0.5 }}>
+                  評価
+                </FormLabel>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                  <Rating
+                    name="watch-rating"
+                    size="large"
+                    value={rating}
+                    onChange={(_, value) => setRating(value)}
+                    onChangeActive={(_, value) => setHoverRating(value)}
+                    getLabelText={(value) => `${value}つ星（${RATING_LABELS[value]}）`}
+                    disabled={saving}
+                    role="radiogroup"
+                    aria-labelledby="watch-rating-label"
+                  />
+                  <Typography variant="body2" color={shownRating ? 'text.primary' : 'text.secondary'} aria-hidden="true">
+                    {ratingText(shownRating)}
+                  </Typography>
+                  {rating && (
+                    <Button size="small" onClick={() => setRating(null)} disabled={saving} sx={{ minWidth: 0 }}>
+                      評価を外す
+                    </Button>
+                  )}
+                </Box>
+              </FormControl>
+
               <TextField
                 label="視聴日"
                 type="date"
@@ -76,24 +204,57 @@ export default function WatchDialog({ movie, initial, title = '見たに記録',
                 value={watchedOn}
                 onChange={(event) => setWatchedOn(event.target.value)}
                 error={Boolean(dateError)}
-                helperText={dateError || ' '}
+                helperText={dateError || (isAnime ? '見終わった日（シリーズは最終話を見た日）' : ' ')}
                 disabled={saving}
                 slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: today } }}
               />
-              <TextField
-                label="視聴時間"
-                type="number"
-                size="small"
-                value={minutesText}
-                onChange={(event) => setMinutesText(event.target.value)}
-                error={Boolean(minutesError)}
-                helperText={minutesError || (!initial && movie.runtime_min ? '上映時間を入れています。途中までなら書き換えてください' : '分からなければ空欄のままで構いません')}
-                disabled={saving}
-                slotProps={{
-                  htmlInput: { min: 0, step: 1, inputMode: 'numeric' },
-                  input: { endAdornment: <InputAdornment position="end">分</InputAdornment> },
-                }}
-              />
+
+              {isAnime ? (
+                <Box>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                    <TextField
+                      label="見た話数"
+                      type="number"
+                      size="small"
+                      value={episodesText}
+                      onChange={(event) => setEpisodesText(event.target.value)}
+                      error={Boolean(episodesError)}
+                      helperText={episodesError || '1クールは12話前後'}
+                      disabled={saving}
+                      slotProps={numberInput('話')}
+                    />
+                    <TextField
+                      label="1話の長さ"
+                      type="number"
+                      size="small"
+                      value={episodeMinutesText}
+                      onChange={(event) => setEpisodeMinutesText(event.target.value)}
+                      error={Boolean(episodeMinutesError)}
+                      helperText={episodeMinutesError || 'テレビアニメは24分前後'}
+                      disabled={saving}
+                      slotProps={numberInput('分')}
+                    />
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" aria-live="polite" sx={{ mt: 0.5 }}>
+                    視聴時間: {totalMinutes != null ? formatMinutes(totalMinutes) : '不明'}
+                  </Typography>
+                </Box>
+              ) : (
+                <TextField
+                  label="視聴時間"
+                  type="number"
+                  size="small"
+                  value={minutesText}
+                  onChange={(event) => setMinutesText(event.target.value)}
+                  error={Boolean(minutesError)}
+                  helperText={
+                    minutesError ||
+                    (!initial && movie.runtime_min ? '上映時間を入れています。途中までなら書き換えてください' : '分からなければ空欄のままで構いません')
+                  }
+                  disabled={saving}
+                  slotProps={numberInput('分')}
+                />
+              )}
             </>
           ) : (
             <Alert severity="info">

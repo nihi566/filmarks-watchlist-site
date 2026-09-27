@@ -22,11 +22,16 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import MovieIcon from '@mui/icons-material/Movie'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import AddIcon from '@mui/icons-material/Add'
+import Rating from '@mui/material/Rating'
 import { visuallyHidden } from '@mui/utils'
 import WatchDialog from '../components/WatchDialog.jsx'
+import FilterButton from '../components/FilterButton.jsx'
 import { recordsErrorMessage } from '../records/github.js'
-import { todayLocal } from '../records/records.js'
+import { isManualId, newManualId, todayLocal, watchChangeFromEntry } from '../records/records.js'
+import { KIND_FILTERS, RATING_LABELS, filterRecordsByKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 import { addMonths, formatMinutes, summarizeMonth, summarizeYear, weekdayLabel } from '../records/summary.js'
+import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 
 function Stat({ label, value, unit }) {
   return (
@@ -97,41 +102,94 @@ function dayHeading(date) {
   return `${m}月${d}日（${weekdayLabel(date)}）`
 }
 
+// 「アニメ 2本（24話）・邦画 1本」のような種類ごとの内訳
+function kindsText(kinds) {
+  return kinds
+    .map(({ kind, count, episodes }) => `${kindLabel(kind)} ${count}本${kind === 'anime' && episodes > 0 ? `（${episodes}話）` : ''}`)
+    .join('・')
+}
+
+// 一覧の 2 行目: 種類・話数・視聴時間
+function itemDetail(item) {
+  const parts = [kindLabel(item.kind)]
+  if (item.kind === 'anime' && item.episodes) parts.push(`${item.episodes}話`)
+  parts.push(item.minutes != null ? formatMinutes(item.minutes) : '視聴時間不明')
+  return parts.join('・')
+}
+
+function itemUrl(item) {
+  return isManualId(item.movie_id) ? filmarksSearchUrl(item.title, item.kind) : filmarksMovieUrl(item.movie_id)
+}
+
+function ItemRating({ value }) {
+  if (!value) {
+    return (
+      <Typography component="span" variant="caption" color="text.secondary">
+        未評価
+      </Typography>
+    )
+  }
+  return (
+    <Rating
+      value={value}
+      readOnly
+      size="small"
+      getLabelText={(stars) => `★${stars}（${RATING_LABELS[stars]}）`}
+      sx={{ verticalAlign: 'middle' }}
+    />
+  )
+}
+
 export default function RecordsPage({ records }) {
   const today = todayLocal()
   const [thisYear, thisMonth] = today.split('-').map(Number)
   const [period, setPeriod] = useState({ year: thisYear, month: thisMonth })
+  // 閉じても item は残す（閉じるアニメーションの間に項目名が入れ替わらないように）
   const [menu, setMenu] = useState(null)
+  const closeMenu = () => setMenu((current) => current && { ...current, open: false })
   const [editTarget, setEditTarget] = useState(null)
   const [notice, setNotice] = useState(null)
+  const [kindFilter, setKindFilter] = useState('all')
 
+  // entries は操作（編集・取り消し）用に全件、shown は種類で絞り込んだ集計・一覧用
   const entries = records.file?.records
-  const month = useMemo(() => summarizeMonth(entries, period.year, period.month), [entries, period])
+  const shown = useMemo(() => filterRecordsByKind(entries, kindFilter), [entries, kindFilter])
+  const hasUnclassified = useMemo(() => Object.values(entries ?? {}).some((entry) => !entry.kind), [entries])
+  const month = useMemo(() => summarizeMonth(shown, period.year, period.month), [shown, period])
   const previous = addMonths(period.year, period.month, -1)
   const previousCount = useMemo(
-    () => summarizeMonth(entries, previous.year, previous.month).count,
-    [entries, previous.year, previous.month],
+    () => summarizeMonth(shown, previous.year, previous.month).count,
+    [shown, previous.year, previous.month],
   )
-  const year = useMemo(() => summarizeYear(entries, period.year), [entries, period.year])
+  const year = useMemo(() => summarizeYear(shown, period.year), [shown, period.year])
   const isThisMonth = period.year === thisYear && period.month === thisMonth
   // 記録を読み終えるまで編集・見たいに戻すを出さない（古い内容で上書きしないため）
   const canEdit = records.canWrite && records.status === 'ready'
 
   const move = (delta) => setPeriod((current) => addMonths(current.year, current.month, delta))
 
+  // ウォッチリスト由来の作品は「見たい」に戻し、手で追加した作品は記録を消す（どちらも元に戻せる）
   const unwatch = async (item) => {
-    setMenu(null)
+    closeMenu()
     const entry = entries[item.movie_id]
+    const manual = isManualId(item.movie_id)
     try {
       await records.save({ type: 'unwatch', movie_id: item.movie_id })
       setNotice({
         severity: 'info',
-        text: `「${item.title}」を見たいに戻しました`,
-        undo: { type: 'watch', movie_id: item.movie_id, title: entry.title, image: entry.image, watched_on: entry.watched_on, minutes: entry.minutes },
+        text: manual ? `「${item.title}」の記録を削除しました` : `「${item.title}」を見たいに戻しました`,
+        undo: watchChangeFromEntry(item.movie_id, entry),
       })
     } catch (err) {
-      setNotice({ severity: 'error', text: `見たいに戻せませんでした。${recordsErrorMessage(err)}` })
+      setNotice({ severity: 'error', text: `${manual ? '削除できませんでした' : '見たいに戻せませんでした'}。${recordsErrorMessage(err)}` })
     }
+  }
+
+  // 追加・編集した記録が今の表示（月・種類）から外れるときは、見える所へ切り替える
+  const showRecord = (change) => {
+    const [y, m] = change.watched_on.split('-').map(Number)
+    setPeriod({ year: y, month: m })
+    if (!matchesKindFilter(change.kind, kindFilter)) setKindFilter('all')
   }
 
   const undo = async (change) => {
@@ -185,6 +243,19 @@ export default function RecordsPage({ records }) {
         </Alert>
       )}
 
+      <Box role="group" aria-label="種類で絞り込む" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        {[...KIND_FILTERS, ...(hasUnclassified ? [{ value: 'none', label: '未分類' }] : [])].map((filter) => (
+          <FilterButton
+            key={filter.value}
+            selected={kindFilter === filter.value}
+            aria-pressed={kindFilter === filter.value}
+            onClick={() => setKindFilter(filter.value)}
+          >
+            {filter.label}
+          </FilterButton>
+        ))}
+      </Box>
+
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
         <IconButton aria-label="前の月" onClick={() => move(-1)}>
           <ChevronLeftIcon />
@@ -210,6 +281,11 @@ export default function RecordsPage({ records }) {
             {comparison}
           </Typography>
         )}
+        {month.kinds.length > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {kindsText(month.kinds)}
+          </Typography>
+        )}
         {month.unknownCount > 0 && (
           <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
             視聴時間が分からない {month.unknownCount} 本は時間に含めていません
@@ -223,6 +299,11 @@ export default function RecordsPage({ records }) {
           <Stat label="見た作品" value={year.count} unit="本" />
           <Stat label="視聴時間" value={formatMinutes(year.minutes)} />
         </Box>
+        {year.kinds.length > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {kindsText(year.kinds)}
+          </Typography>
+        )}
         <MonthBars
           months={year.months}
           selectedMonth={period.month}
@@ -232,10 +313,26 @@ export default function RecordsPage({ records }) {
       </Paper>
 
       <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography component="h2" sx={{ fontWeight: 700, flexGrow: 1 }}>
+            見た作品
+          </Typography>
+          {canEdit && (
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })}
+            >
+              作品を追加
+            </Button>
+          )}
+        </Box>
         {month.days.length === 0 ? (
           <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
             <Typography color="text.secondary" sx={{ mb: 1.5 }}>
-              この月の視聴記録はまだありません。ウォッチリストの「見た」から記録できます。
+              {kindFilter === 'all'
+                ? 'この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は「作品を追加」から記録できます。'
+                : 'この月に、この種類の視聴記録はありません。'}
             </Typography>
             <Button variant="outlined" href="#/">
               ウォッチリストへ
@@ -256,7 +353,7 @@ export default function RecordsPage({ records }) {
                           <IconButton
                             edge="end"
                             aria-label={`「${item.title}」の操作`}
-                            onClick={(event) => setMenu({ anchor: event.currentTarget, item })}
+                            onClick={(event) => setMenu({ anchor: event.currentTarget, item, open: true })}
                           >
                             <MoreVertIcon />
                           </IconButton>
@@ -266,7 +363,7 @@ export default function RecordsPage({ records }) {
                       {/* 記録した作品の Filmarks ページ（レビューや Mark を付けに行く導線） */}
                       <ListItemButton
                         component="a"
-                        href={`https://filmarks.com/movies/${item.movie_id}`}
+                        href={itemUrl(item)}
                         target="_blank"
                         rel="noopener"
                         sx={{ pr: canEdit ? 7 : 2 }}
@@ -278,7 +375,14 @@ export default function RecordsPage({ records }) {
                       </ListItemAvatar>
                       <ListItemText
                         primary={item.title}
-                        secondary={item.minutes != null ? formatMinutes(item.minutes) : '視聴時間不明'}
+                        secondary={
+                          <>
+                            <ItemRating value={item.rating} />
+                            <Box component="span" sx={{ display: 'block' }}>
+                              {itemDetail(item)}
+                            </Box>
+                          </>
+                        }
                         slotProps={{ primary: { variant: 'body2' } }}
                       />
                       <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, ml: 1 }} />
@@ -295,17 +399,19 @@ export default function RecordsPage({ records }) {
         )}
       </Paper>
 
-      <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
+      <Menu anchorEl={menu?.anchor} open={Boolean(menu?.open)} onClose={closeMenu}>
         <MenuItem
           onClick={() => {
             const { item } = menu
-            setMenu(null)
+            closeMenu()
             setEditTarget({ movie: item, initial: entries[item.movie_id] })
           }}
         >
           記録を編集
         </MenuItem>
-        <MenuItem onClick={() => unwatch(menu.item)}>見たいに戻す</MenuItem>
+        <MenuItem onClick={() => unwatch(menu.item)}>
+          {menu && isManualId(menu.item.movie_id) ? '記録を削除' : '見たいに戻す'}
+        </MenuItem>
       </Menu>
 
       {editTarget && (
@@ -313,11 +419,18 @@ export default function RecordsPage({ records }) {
           key={editTarget.movie.movie_id}
           movie={editTarget.movie}
           initial={editTarget.initial}
-          title="記録を編集"
+          title={editTarget.isNew ? '作品を追加して記録' : '記録を編集'}
+          // 手で追加した作品はタイトルも直せる（新規はテレビアニメを記録する場面が多いのでアニメを選んでおく）
+          editableTitle={isManualId(editTarget.movie.movie_id)}
+          defaultKind={editTarget.isNew ? 'anime' : null}
           canWrite={records.canWrite}
           onSave={records.save}
-          onSaved={() => {
-            setNotice({ severity: 'success', text: `「${editTarget.movie.title}」の記録を更新しました` })
+          onSaved={(change) => {
+            setNotice({
+              severity: 'success',
+              text: editTarget.isNew ? `「${change.title}」を記録しました` : `「${change.title}」の記録を更新しました`,
+            })
+            showRecord(change)
             setEditTarget(null)
           }}
           onClose={() => setEditTarget(null)}

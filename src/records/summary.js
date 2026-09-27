@@ -1,6 +1,8 @@
 // 視聴記録（records.json の records）を月・年で集計する純関数。
 // 視聴日は 'YYYY-MM-DD' の文字列のまま扱い、Date に変換しない（UTC 解釈で日付がずれるため）。
 // 視聴時間が不明（null）の作品は合計時間に含めず、unknownCount として別に数える。
+// 種類で絞り込むときは、呼び出し側で filterRecordsByKind を通した records を渡す。
+import { KINDS, isKind } from './kinds.js'
 
 function entriesOf(records) {
   return Object.entries(records ?? {}).map(([movieId, entry]) => ({ movie_id: movieId, ...entry }))
@@ -10,12 +12,26 @@ function prefixOf(year, month) {
   return month ? `${year}-${String(month).padStart(2, '0')}-` : `${year}-`
 }
 
+function sumEpisodes(items) {
+  return items.reduce((sum, item) => sum + (item.kind === 'anime' ? (item.episodes ?? 0) : 0), 0)
+}
+
 function totals(items) {
   return {
     count: items.length,
     minutes: items.reduce((sum, item) => sum + (item.minutes ?? 0), 0),
     unknownCount: items.filter((item) => item.minutes == null).length,
+    episodes: sumEpisodes(items),
   }
+}
+
+// 種類ごとの本数（アニメは話数も）。0 本の種類は出さず、種類の無い記録は最後に「未分類」（none）でまとめる
+function countByKind(items) {
+  const groups = [...KINDS.map((kind) => kind.value), 'none'].map((value) => {
+    const matched = items.filter((item) => (isKind(item.kind) ? item.kind : 'none') === value)
+    return { kind: value, count: matched.length, episodes: sumEpisodes(matched) }
+  })
+  return groups.filter((group) => group.count > 0)
 }
 
 export function summarizeMonth(records, year, month) {
@@ -30,10 +46,18 @@ export function summarizeMonth(records, year, month) {
     .map(([date, dayItems]) => ({
       date,
       items: dayItems
-        .map(({ movie_id, title, image, minutes }) => ({ movie_id, title, image, minutes }))
+        .map(({ movie_id, title, image, minutes, rating, kind, episodes }) => ({
+          movie_id,
+          title,
+          image,
+          minutes,
+          rating: rating ?? null,
+          kind: kind ?? null,
+          episodes: episodes ?? null,
+        }))
         .sort((a, b) => a.title.localeCompare(b.title, 'ja')),
     }))
-  return { ...totals(items), days }
+  return { ...totals(items), kinds: countByKind(items), days }
 }
 
 export function summarizeYear(records, year) {
@@ -43,7 +67,7 @@ export function summarizeYear(records, year) {
     const { count, minutes } = totals(monthItems)
     return { month: index + 1, count, minutes }
   })
-  return { ...totals(items), months }
+  return { ...totals(items), kinds: countByKind(items), months }
 }
 
 export function formatMinutes(minutes) {

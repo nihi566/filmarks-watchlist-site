@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "meta": "node scripts/update-movie-meta.js"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",

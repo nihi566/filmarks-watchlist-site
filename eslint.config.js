@@ -30,4 +30,9 @@ export default [
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    // scripts/ は Node で動かす補助スクリプト
+    files: ['scripts/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
 ]
