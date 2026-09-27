@@ -28,12 +28,14 @@ import MovieIcon from '@mui/icons-material/Movie'
 import BlockIcon from '@mui/icons-material/Block'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import UpdateIcon from '@mui/icons-material/Update'
 import { visuallyHidden } from '@mui/utils'
 import { serviceIconUrl } from '../serviceIcons.js'
 import WatchDialog from '../components/WatchDialog.jsx'
 import { excludeWatched } from '../records/records.js'
 import { MOVIE_ORDERS, sortMovies } from '../movieOrder.js'
 import { recordsErrorMessage } from '../records/github.js'
+import { describeFetchedAt } from '../fetchedAt.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
@@ -288,6 +290,29 @@ function FilterButton({ selected, children, ...props }) {
   )
 }
 
+// 一覧がいつ時点の Filmarks か（scraper が最後に取得した日時）を、検索欄より上で見落とさない位置に出す
+function FetchedAt({ value }) {
+  const fetched = describeFetchedAt(value)
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5, color: 'text.secondary' }}>
+      <UpdateIcon fontSize="small" />
+      <Typography variant="body2">
+        Filmarks からの取得:{' '}
+        {fetched ? (
+          <>
+            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>
+              {fetched.date}
+            </Box>
+            （{fetched.ago}）
+          </>
+        ) : (
+          '日時不明'
+        )}
+      </Typography>
+    </Box>
+  )
+}
+
 export default function WatchlistPage({ searchRef, records }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -474,6 +499,8 @@ export default function WatchlistPage({ searchRef, records }) {
 
       {data && (
         <>
+          <FetchedAt value={data.generated_at} />
+
           <TextField
             type="search"
             placeholder="タイトルで検索"
@@ -495,11 +522,7 @@ export default function WatchlistPage({ searchRef, records }) {
             sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
           />
 
-          <Typography variant="caption" component="p" color="text.secondary" sx={{ mt: 1, mb: 1.5 }}>
-            最終更新: {data.generated_at}
-          </Typography>
-
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5, mb: 1.5 }}>
             <FilterButton selected={!serviceFilter} aria-pressed={!serviceFilter} onClick={() => selectService(null)}>
               すべて {uniqueCount}
             </FilterButton>
