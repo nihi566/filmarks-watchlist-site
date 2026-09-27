@@ -65,6 +65,7 @@ function RecommendationCard({ item, rank }) {
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, my: 0.75 }}>
           {item.kind && <Chip size="small" color="primary" variant="outlined" label={kindLabel(item.kind)} />}
+          {item.country && <Chip size="small" variant="outlined" label={item.country} />}
           {movie?.runtime_min ? <Chip size="small" label={`${movie.runtime_min}分`} /> : null}
           {movie && (
             <Chip size="small" label={movie.services.length > 0 ? movie.services.join('・') : '未配信'} />
@@ -124,9 +125,14 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
   const canRun = Boolean(llmSettings.model) && records.status !== 'loading' && (!needsWatchlist || watchlistReady) && !running
 
   const ask = async () => {
-    const candidates = needsWatchlist ? pickCandidates(uniqueMovies(watchlist.data.tabs), entries) : []
+    const candidates = needsWatchlist ? pickCandidates(uniqueMovies(watchlist.data.tabs), entries, kind) : []
     if (needsWatchlist && candidates.length === 0) {
-      setRun({ status: 'error', results: [], error: 'ウォッチリストに、まだ見ていない作品がありません。「新しい作品も」を選んでください。', prompt: '' })
+      setRun({
+        status: 'error',
+        results: [],
+        error: 'ウォッチリストに、この種類のまだ見ていない作品がありません。「新しい作品も」を選んでください。',
+        prompt: '',
+      })
       return
     }
     const request = buildRecommendationRequest({ records: entries, candidates, kind, mode, wish })

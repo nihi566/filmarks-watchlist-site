@@ -38,12 +38,29 @@ import { MOVIE_ORDERS, sortMovies } from '../movieOrder.js'
 import { recordsErrorMessage } from '../records/github.js'
 import { describeFetchedAt } from '../fetchedAt.js'
 import { filmarksMovieUrl } from '../filmarks.js'
+import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
   { value: 'count', label: '作品数の多い順' },
   { value: 'name', label: 'サービス名順' },
 ]
+
+// 種類の絞り込みの選択肢。種類が分からない作品（movie-meta.json に無い作品）があれば「種類不明」も出す
+const KIND_MENU_LABELS = { all: 'すべての種類', movie: '映画（邦画・洋画）' }
+const KIND_MENU = KIND_FILTERS.map((item) => ({ ...item, label: KIND_MENU_LABELS[item.value] ?? item.label }))
+
+function filterTabsByKind(tabs, kindFilter) {
+  if (kindFilter === 'all') return tabs
+  return tabs
+    .map((tab) => ({ ...tab, movies: tab.movies.filter((movie) => matchesKindFilter(movie.kind, kindFilter)) }))
+    .filter((tab) => tab.movies.length > 0)
+}
+
+// 一覧の 2 行目: 種類・上映時間（分からないものは出さない）
+function movieDetail(movie) {
+  return [isKind(movie.kind) && kindLabel(movie.kind), movie.runtime_min && `${movie.runtime_min}分`].filter(Boolean).join('・')
+}
 
 // 複数サービスに重複して載っている作品は 1 件と数える（「すべて」の件数）
 function countUniqueMovies(tabs) {
@@ -164,18 +181,24 @@ function MovieRow({ movie, onWatch, canWatch }) {
       sx={{ gap: 1.5, py: 0.5, pl: 2, pr: '92px !important' }}
     >
       <Thumbnail src={movie.image} />
-      <Typography
-        variant="body2"
-        sx={{
-          flexGrow: 1,
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-        }}
-      >
-        {movie.title}
-      </Typography>
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {movie.title}
+        </Typography>
+        {movieDetail(movie) && (
+          <Typography variant="caption" color="text.secondary" component="p" sx={{ lineHeight: 1.4 }}>
+            {movieDetail(movie)}
+          </Typography>
+        )}
+      </Box>
       <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
       <Box component="span" sx={visuallyHidden}>
         （新しいタブで開きます）
@@ -262,6 +285,8 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   // 検索中は一致したグループを既定で開き、利用者が閉じたものだけを覚える
   const [collapsedInSearch, setCollapsedInSearch] = useState(new Set())
   const [serviceMenuAnchor, setServiceMenuAnchor] = useState(null)
+  const [kindFilter, setKindFilter] = useState('all')
+  const [kindMenuAnchor, setKindMenuAnchor] = useState(null)
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
   // 「見た」に記録しようとしている作品と、記録後の通知（元に戻す用の作品を持つ）
   const [watchTarget, setWatchTarget] = useState(null)
@@ -300,7 +325,16 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
 
   // 「見た」の作品は一覧・検索・件数のすべてから外す（記録の読込前・失敗時は全件）
   const watched = records.file?.records
-  const visibleTabs = useMemo(() => (data ? excludeWatched(data.tabs, watched) : []), [data, watched])
+  const unwatchedTabs = useMemo(() => (data ? excludeWatched(data.tabs, watched) : []), [data, watched])
+  // 種類の絞り込みは件数・サービスの一覧を含むすべてに効かせる
+  const visibleTabs = useMemo(() => filterTabsByKind(unwatchedTabs, kindFilter), [unwatchedTabs, kindFilter])
+  const kindOptions = useMemo(() => {
+    const hasUnknown = unwatchedTabs.some((tab) => tab.movies.some((movie) => !isKind(movie.kind)))
+    return [...KIND_MENU, ...(hasUnknown ? [{ value: 'none', label: '種類不明' }] : [])].map((option) => ({
+      ...option,
+      count: countUniqueMovies(filterTabsByKind(unwatchedTabs, option.value)),
+    }))
+  }, [unwatchedTabs])
   const uniqueCount = useMemo(() => countUniqueMovies(visibleTabs), [visibleTabs])
   const allGroups = useMemo(() => sortGroups(visibleTabs, sortKey), [visibleTabs, sortKey])
 
@@ -333,10 +367,16 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
     setServiceMenuAnchor(null)
   }
 
+  const selectKind = (value) => {
+    setKindFilter(value)
+    setKindMenuAnchor(null)
+  }
+
+  const kindName = kindFilter === 'all' ? '' : kindOptions.find((option) => option.value === kindFilter)?.label
   const announcement = searching
     ? `「${keyword}」に一致する作品 ${matchCount}件`
-    : serviceFilter
-      ? `${serviceFilter} ${matchCount}件`
+    : serviceFilter || kindName
+      ? `${[serviceFilter, kindName].filter(Boolean).join('・')} ${matchCount}件`
       : ''
 
   const startWatch = (movie, group) => {
@@ -442,6 +482,16 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
               {serviceFilter ?? 'サービス別'}
             </FilterButton>
             <FilterButton
+              selected={kindFilter !== 'all'}
+              endIcon={<KeyboardArrowDownIcon />}
+              aria-haspopup="menu"
+              aria-controls={kindMenuAnchor ? 'kind-menu' : undefined}
+              aria-expanded={kindMenuAnchor ? 'true' : undefined}
+              onClick={(event) => setKindMenuAnchor(event.currentTarget)}
+            >
+              {kindFilter === 'all' ? '種類別' : kindName}
+            </FilterButton>
+            <FilterButton
               endIcon={<KeyboardArrowDownIcon />}
               aria-haspopup="menu"
               aria-controls={sortMenuAnchor ? 'sort-menu' : undefined}
@@ -466,6 +516,18 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
                 <ListItemText primary={tab.name} />
                 <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
                   {tab.movies.length}件
+                </Typography>
+              </MenuItem>
+            ))}
+          </Menu>
+
+          <Menu id="kind-menu" anchorEl={kindMenuAnchor} open={Boolean(kindMenuAnchor)} onClose={() => setKindMenuAnchor(null)}>
+            {kindOptions.map((option) => (
+              <MenuItem key={option.value} selected={option.value === kindFilter} onClick={() => selectKind(option.value)}>
+                <ListItemIcon>{option.value === kindFilter && <CheckIcon fontSize="small" />}</ListItemIcon>
+                <ListItemText primary={option.label} />
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                  {option.count}件
                 </Typography>
               </MenuItem>
             ))}
@@ -540,6 +602,9 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
         <WatchDialog
           key={watchTarget.movie_id}
           movie={watchTarget}
+          // Filmarks の製作国・ジャンルで種類が分かる作品は、その種類を選んでおく
+          defaultKind={isKind(watchTarget.kind) ? watchTarget.kind : null}
+          kindNote="Filmarks のジャンル・製作国から選んでいます。違っていたら選び直してください"
           canWrite={records.canWrite}
           onSave={records.save}
           onSaved={onWatched}

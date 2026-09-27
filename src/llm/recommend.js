@@ -1,8 +1,9 @@
 // 視聴記録（★評価・種類）からローカル LLM へのおすすめの頼み方を組み立て、返ってきた JSON を画面用に整える純関数。
 // 小さなモデルでも文脈に収まるよう、記録と候補は件数を絞って 1 行ずつの短い形で渡す。
-import { KINDS, isKind, kindLabel, matchesKindFilter, RATING_LABELS } from '../records/kinds.js'
+import { isKind, kindLabel, matchesKindFilter, RATING_LABELS } from '../records/kinds.js'
 
 export const RECOMMEND_COUNT = 5
+const FORMATS = ['アニメ', '実写']
 // 候補・記録を渡す上限（新しい順に残す）
 const MAX_CANDIDATES = 150
 const MAX_LIKED = 40
@@ -68,7 +69,10 @@ function schemaFor(mode, count) {
   const properties = {
     ...(mode === 'watchlist' ? { id: { type: 'integer' } } : {}),
     title: { type: 'string' },
-    kind: { type: 'string', enum: KINDS.map((kind) => kind.value) },
+    // 種類（アニメ・邦画・洋画）は直接聞かず、製作国と「アニメか実写か」を答えさせてこちらで決める。
+    // 小さなモデルは japanese を「日本の作品」と読んで日本のアニメに付けたり、邦画を洋画と取り違えたりするため
+    country: { type: 'string' },
+    format: { type: 'string', enum: FORMATS },
     reason: { type: 'string' },
   }
   return {
@@ -85,14 +89,21 @@ function schemaFor(mode, count) {
   }
 }
 
-// ウォッチリストの候補から、記録済みの作品を除いて新しくクリップした順に上限まで残す
-export function pickCandidates(movies, records) {
+// ウォッチリストの候補から、記録済みの作品と、種類が分かっていて頼んだ種類と違う作品を除き、
+// 新しくクリップした順に上限まで残す（種類が分からない作品は残し、LLM に判断させる）
+export function pickCandidates(movies, records, kind = 'all') {
   const watchedTitles = new Set(Object.values(records ?? {}).map((entry) => normalizeTitle(entry.title)))
   const rank = (movie) => (Number.isFinite(movie.clip_order) ? movie.clip_order : Infinity)
   return movies
     .filter((movie) => !(movie.movie_id in (records ?? {})) && !watchedTitles.has(normalizeTitle(movie.title)))
+    .filter((movie) => !isKind(movie.kind) || matchesKindFilter(movie.kind, kind))
     .sort((a, b) => rank(a) - rank(b))
     .slice(0, MAX_CANDIDATES)
+}
+
+function candidateLine(movie, index) {
+  const details = [isKind(movie.kind) && kindLabel(movie.kind), movie.runtime_min && `${movie.runtime_min}分`].filter(Boolean)
+  return `${index + 1}: ${movie.title}${details.length > 0 ? `（${details.join('・')}）` : ''}`
 }
 
 // LLM に送る messages と出力の JSON Schema を返す。candidates は pickCandidates の結果（mode が watchlist のときだけ使う）
@@ -103,8 +114,8 @@ export function buildRecommendationRequest({ records, candidates = [], kind = 'a
     lines.push(
       `次の「候補」の中から、私の好みに合いそうな作品を合う順に最大 ${count} 作品選んでください。候補に無い作品は選ばないでください。`,
       '',
-      '# 候補（番号: タイトル（上映時間））',
-      ...candidates.map((movie, index) => `${index + 1}: ${movie.title}${movie.runtime_min ? `（${movie.runtime_min}分）` : ''}`),
+      '# 候補（番号: タイトル（種類・上映時間））',
+      ...candidates.map(candidateLine),
     )
   } else {
     lines.push(
@@ -122,9 +133,10 @@ export function buildRecommendationRequest({ records, candidates = [], kind = 'a
     '',
     '# 出力の形',
     mode === 'watchlist'
-      ? '{"recommendations": [{"id": 候補の番号, "title": "候補のタイトル", "kind": "anime か japanese か foreign", "reason": "薦める理由"}]}'
-      : '{"recommendations": [{"title": "作品のタイトル", "kind": "anime か japanese か foreign", "reason": "薦める理由"}]}',
-    'kind は anime（アニメ）・japanese（邦画＝日本の実写映画）・foreign（洋画＝海外の実写映画）のどれかです。',
+      ? '{"recommendations": [{"id": 候補の番号, "title": "候補のタイトル", "country": "製作国", "format": "アニメ か 実写", "reason": "薦める理由"}]}'
+      : '{"recommendations": [{"title": "作品のタイトル", "country": "製作国", "format": "アニメ か 実写", "reason": "薦める理由"}]}',
+    'country はその作品の製作国（例: 日本、アメリカ、イギリス、韓国）です。',
+    'format はアニメーション作品なら「アニメ」、俳優が演じる実写作品なら「実写」です。',
     'reason は、視聴記録のどの作品と似ているか・どこが好みに合いそうかを、日本語で 2 文以内で書いてください。',
   )
 
@@ -150,6 +162,23 @@ function findCandidate(item, candidates, candidateByTitle) {
   return !title || candidateTitle.includes(title) || title.includes(candidateTitle) ? byId : null
 }
 
+const JAPAN = new Set(['日本', 'japan', 'jp'])
+
+// 実写の作品は製作国で邦画か洋画かを決める（製作国が無ければ null）
+function kindFromCountry(country) {
+  const place = String(country ?? '').normalize('NFKC').trim().toLowerCase()
+  if (!place) return null
+  return JAPAN.has(place) ? 'japanese' : 'foreign'
+}
+
+// 答えの種類。「アニメか実写か」と製作国から決め、format が無い答えは kind を読んで製作国で正す
+function kindOfAnswer(item) {
+  if (item?.format === 'アニメ') return 'anime'
+  if (item?.format === '実写') return kindFromCountry(item.country)
+  const kind = isKind(item?.kind) ? item.kind : null
+  return kind === 'anime' ? kind : (kindFromCountry(item?.country) ?? kind)
+}
+
 // LLM の JSON を画面用の配列にする。候補に無い作品・見た作品・重複・頼んだ種類と違う作品は捨てる
 export function parseRecommendations(json, { mode = 'watchlist', candidates = [], records, kind = 'all', count = RECOMMEND_COUNT }) {
   const items = Array.isArray(json?.recommendations) ? json.recommendations : []
@@ -160,18 +189,21 @@ export function parseRecommendations(json, { mode = 'watchlist', candidates = []
 
   for (const item of items) {
     if (results.length >= count) break
-    const itemKind = isKind(item?.kind) ? item.kind : null
     let movie = null
     if (mode === 'watchlist') {
       movie = findCandidate(item, candidates, candidateByTitle)
       if (!movie) continue
     }
+    // 候補の種類が Filmarks の情報で分かっていればそれを使い、LLM の答えより優先する
+    const itemKind = isKind(movie?.kind) ? movie.kind : kindOfAnswer(item)
     const title = movie ? movie.title : String(item?.title ?? '').trim()
     const key = normalizeTitle(title)
     if (!key || seen.has(key) || watchedTitles.has(key)) continue
     if (itemKind && !matchesKindFilter(itemKind, kind)) continue
     seen.add(key)
-    results.push({ title, kind: itemKind, reason: String(item?.reason ?? '').trim(), movie })
+    // 製作国も Filmarks の情報があればそれを出す（LLM の答えは作品を知らないと誤る）
+    const country = movie?.countries?.length ? movie.countries.join('・') : String(item?.country ?? '').trim() || null
+    results.push({ title, kind: itemKind, country, reason: String(item?.reason ?? '').trim(), movie })
   }
   return results
 }

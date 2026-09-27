@@ -1,5 +1,6 @@
 // watchlist.json（scraper が生成する Filmarks のウォッチリスト）の取得と正規化。
 // ウォッチリスト画面とおすすめ画面で同じデータを使う。
+// 作品の種類（アニメ・邦画・洋画）は movie-meta.json（npm run meta で Filmarks の製作国・ジャンルから作る）で決める。
 
 export function loadError(kind, status) {
   return Object.assign(new Error(kind), { kind, status })
@@ -45,21 +46,54 @@ export function loadErrorMessage(err) {
   }
 }
 
-export async function fetchWatchlist() {
+function stringList(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []
+}
+
+// 製作国・ジャンルから種類を決める。ジャンルにアニメがあればアニメ、無ければ最初の製作国が日本なら邦画・それ以外は洋画。
+// 情報が無い作品は null（種類不明。おすすめでは LLM に任せ、「見た」では利用者が選ぶ）
+export function kindFromMeta(meta) {
+  const genres = stringList(meta?.genres)
+  const countries = stringList(meta?.countries)
+  if (genres.includes('アニメ')) return 'anime'
+  if (countries.length === 0) return null
+  return countries[0] === '日本' ? 'japanese' : 'foreign'
+}
+
+// 各作品に種類（kind）と製作国（countries）を付ける。meta が無い・読めないときは全作品を種類不明にする
+export function attachKinds(watchlist, metaJson) {
+  const metaById = metaJson && typeof metaJson.movies === 'object' ? metaJson.movies : {}
+  return {
+    ...watchlist,
+    tabs: watchlist.tabs.map((tab) => ({
+      ...tab,
+      movies: tab.movies.map((movie) => {
+        const meta = metaById?.[movie.movie_id]
+        return { ...movie, kind: kindFromMeta(meta), countries: stringList(meta?.countries) }
+      }),
+    })),
+  }
+}
+
+async function fetchJson(name) {
   let res
   try {
-    res = await fetch(`${import.meta.env.BASE_URL}watchlist.json`, { cache: 'no-cache' })
+    res = await fetch(`${import.meta.env.BASE_URL}${name}`, { cache: 'no-cache' })
   } catch {
     throw loadError('network')
   }
   if (!res.ok) throw loadError('http', res.status)
-  let json
   try {
-    json = await res.json()
+    return await res.json()
   } catch {
     throw loadError('parse')
   }
-  return normalizeWatchlist(json)
+}
+
+export async function fetchWatchlist() {
+  // 種類の情報は無くても一覧は出せるので、movie-meta.json の失敗は無視する
+  const [json, meta] = await Promise.all([fetchJson('watchlist.json'), fetchJson('movie-meta.json').catch(() => null)])
+  return attachKinds(normalizeWatchlist(json), meta)
 }
 
 // サービスをまたいで重複する作品を 1 件にまとめ、見られるサービス名を services に集める（未配信は含めない）

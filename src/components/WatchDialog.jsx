@@ -42,13 +42,15 @@ const numberInput = (unit) => ({
 
 // 「見た」に記録するダイアログ。保存に成功したときだけ onSaved を呼ぶ（失敗時は理由を出して閉じない）。
 // initial を渡すと既存の記録の編集になる（各欄の初期値を記録から取る）。
-// editableTitle はウォッチリストに無い作品（テレビアニメなど）を手で追加するときに使い、タイトルも入力させる
+// editableTitle はウォッチリストに無い作品（テレビアニメなど）を手で追加するときに使い、タイトルも入力させる。
+// defaultKind は最初に選んでおく種類、kindNote はその種類のまま変えていないときに出す補足
 export default function WatchDialog({
   movie,
   initial,
   title = '見たに記録',
   editableTitle = false,
   defaultKind = null,
+  kindNote = '',
   canWrite,
   onSave,
   onSaved,
@@ -160,7 +162,11 @@ export default function WatchDialog({
                   ))}
                 </ToggleButtonGroup>
                 <FormHelperText sx={{ mx: 0 }}>
-                  {kind ? 'アニメは話数で、邦画・洋画は時間で記録します' : 'アニメ・邦画・洋画から選んでください'}
+                  {!kind
+                    ? 'アニメ・邦画・洋画から選んでください'
+                    : kindNote && !initial && kind === defaultKind
+                      ? kindNote
+                      : 'アニメは話数で、邦画・洋画は時間で記録します'}
                 </FormHelperText>
               </FormControl>
 

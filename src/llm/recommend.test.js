@@ -52,15 +52,15 @@ describe('buildRecommendationRequest', () => {
     expect(text).toContain('3: 運び屋\n')
     expect(text).toContain('最大 3 作品')
     const item = schema.properties.recommendations.items
-    expect(item.required).toEqual(['id', 'title', 'kind', 'reason'])
-    expect(item.properties.kind.enum).toEqual(['anime', 'japanese', 'foreign'])
+    expect(item.required).toEqual(['id', 'title', 'country', 'format', 'reason'])
+    expect(item.properties.format.enum).toEqual(['アニメ', '実写'])
     expect(schema.properties.recommendations.maxItems).toBe(3)
   })
 
   it('新しい作品を挙げてもらうときは候補を渡さず、id を求めない', () => {
     const { messages, schema } = buildRecommendationRequest({ records, mode: 'any' })
     expect(messages[1].content).not.toContain('# 候補')
-    expect(schema.properties.recommendations.items.required).toEqual(['title', 'kind', 'reason'])
+    expect(schema.properties.recommendations.items.required).toEqual(['title', 'country', 'format', 'reason'])
   })
 
   it('種類の指定と今日の希望を伝える', () => {
@@ -80,6 +80,36 @@ describe('buildRecommendationRequest', () => {
   })
 })
 
+describe('Filmarks の種類が分かっている候補', () => {
+  const known = [
+    { movie_id: '20', title: '誰も知らない', clip_order: 1, runtime_min: 141, kind: 'japanese', countries: ['日本'], services: [] },
+    { movie_id: '21', title: 'ソウルメイト', clip_order: 2, kind: 'foreign', countries: ['韓国'], services: [] },
+    { movie_id: '22', title: 'ズートピア２', clip_order: 3, kind: 'anime', countries: ['アメリカ'], services: [] },
+    { movie_id: '23', title: '種類不明', clip_order: 4, kind: null, countries: [], services: [] },
+  ]
+
+  it('頼んだ種類と違う候補は LLM に渡す前に外し、種類不明の候補は残す', () => {
+    expect(pickCandidates(known, {}, 'foreign').map((movie) => movie.title)).toEqual(['ソウルメイト', '種類不明'])
+    expect(pickCandidates(known, {}, 'movie').map((movie) => movie.title)).toEqual(['誰も知らない', 'ソウルメイト', '種類不明'])
+    expect(pickCandidates(known, {}, 'all')).toHaveLength(4)
+  })
+
+  it('候補の行に種類を書き添える', () => {
+    const text = buildRecommendationRequest({ records: {}, candidates: known, mode: 'watchlist' }).messages[1].content
+    expect(text).toContain('1: 誰も知らない（邦画・141分）')
+    expect(text).toContain('3: ズートピア２（アニメ）')
+    expect(text).toContain('4: 種類不明\n')
+  })
+
+  it('LLM が種類や製作国を取り違えても、Filmarks の情報を使う', () => {
+    const results = parseRecommendations(
+      { recommendations: [{ id: 1, title: '誰も知らない', country: 'アメリカ', kind: 'foreign', reason: 'x' }] },
+      { mode: 'watchlist', candidates: known, records: {}, kind: 'japanese' },
+    )
+    expect(results).toMatchObject([{ title: '誰も知らない', kind: 'japanese', country: '日本' }])
+  })
+})
+
 describe('parseRecommendations', () => {
   const candidates = pickCandidates(movies, records)
 
@@ -88,7 +118,7 @@ describe('parseRecommendations', () => {
       { recommendations: [{ id: 2, title: 'TENET', kind: 'foreign', reason: '時間もの' }] },
       { mode: 'watchlist', candidates, records },
     )
-    expect(results).toEqual([{ title: 'TENET テネット', kind: 'foreign', reason: '時間もの', movie: candidates[1] }])
+    expect(results).toEqual([{ title: 'TENET テネット', kind: 'foreign', country: null, reason: '時間もの', movie: candidates[1] }])
   })
 
   it('番号が違ってもタイトルが候補と一致すればその作品にする', () => {
@@ -129,6 +159,53 @@ describe('parseRecommendations', () => {
     )
     expect(results.map((item) => item.title)).toEqual(['ぼっち・ざ・ろっく！', 'リコリス・リコイル'])
     expect(results[0].movie).toBeNull()
+  })
+
+  it('「アニメか実写か」と製作国から種類を決める', () => {
+    const results = parseRecommendations(
+      {
+        recommendations: [
+          { title: '鬼滅の刃', country: '日本', format: 'アニメ', reason: 'a' },
+          { title: '誰も知らない', country: '日本', format: '実写', reason: 'b' },
+          { title: 'パラサイト', country: '韓国', format: '実写', reason: 'c' },
+          { title: '製作国なし', country: '', format: '実写', reason: 'd' },
+        ],
+      },
+      { mode: 'any', records, kind: 'all' },
+    )
+    expect(results.map((item) => [item.title, item.kind])).toEqual([
+      ['鬼滅の刃', 'anime'],
+      ['誰も知らない', 'japanese'],
+      ['パラサイト', 'foreign'],
+      ['製作国なし', null],
+    ])
+  })
+
+  it('format の無い答えは kind を読み、実写の作品は製作国で邦画・洋画を決め直して、頼んだ種類と違えば捨てる', () => {
+    const results = parseRecommendations(
+      {
+        recommendations: [
+          { title: '誰も知らない', country: '日本', kind: 'foreign', reason: '邦画を洋画と取り違えた答え' },
+          { title: 'ソウルメイト', country: '韓国', kind: 'foreign', reason: 'x' },
+          { title: 'パラサイト', country: '韓国', kind: 'japanese', reason: '洋画を邦画と取り違えた答え' },
+          { title: 'ＡＫＩＲＡ', country: '日本', kind: 'anime', reason: 'アニメは製作国で変えない' },
+          { title: '製作国なし', kind: 'foreign', reason: 'y' },
+        ],
+      },
+      { mode: 'any', records, kind: 'all' },
+    )
+    expect(results.map((item) => [item.title, item.kind])).toEqual([
+      ['誰も知らない', 'japanese'],
+      ['ソウルメイト', 'foreign'],
+      ['パラサイト', 'foreign'],
+      ['ＡＫＩＲＡ', 'anime'],
+      ['製作国なし', 'foreign'],
+    ])
+    const foreignOnly = parseRecommendations(
+      { recommendations: [{ title: '誰も知らない', country: 'Japan', kind: 'foreign', reason: 'x' }] },
+      { mode: 'any', records, kind: 'foreign' },
+    )
+    expect(foreignOnly).toEqual([])
   })
 
   it('形が違う応答でも例外にせず空にする', () => {

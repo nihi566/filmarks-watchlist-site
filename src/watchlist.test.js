@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeWatchlist, uniqueMovies } from './watchlist.js'
+import { attachKinds, kindFromMeta, normalizeWatchlist, uniqueMovies } from './watchlist.js'
 
 describe('uniqueMovies', () => {
   it('サービスをまたいだ同じ作品を 1 件にまとめ、見られるサービスを集める（未配信は含めない）', () => {
@@ -24,5 +24,35 @@ describe('normalizeWatchlist', () => {
 
   it('tabs が無ければ parse エラー', () => {
     expect(() => normalizeWatchlist({})).toThrow(expect.objectContaining({ kind: 'parse' }))
+  })
+})
+
+describe('kindFromMeta', () => {
+  it('ジャンルにアニメがあればアニメ、無ければ最初の製作国で邦画・洋画を決める', () => {
+    expect(kindFromMeta({ countries: ['日本'], genres: ['アニメ', 'SF'] })).toBe('anime')
+    expect(kindFromMeta({ countries: ['アメリカ'], genres: ['アニメ'] })).toBe('anime')
+    expect(kindFromMeta({ countries: ['日本'], genres: ['ドラマ'] })).toBe('japanese')
+    expect(kindFromMeta({ countries: ['アメリカ', '日本'], genres: ['アクション'] })).toBe('foreign')
+    expect(kindFromMeta({ countries: ['韓国'], genres: [] })).toBe('foreign')
+  })
+
+  it('情報が無い・形が違うときは種類不明（null）', () => {
+    expect(kindFromMeta(undefined)).toBeNull()
+    expect(kindFromMeta({ countries: [], genres: ['ドラマ'] })).toBeNull()
+    expect(kindFromMeta({ countries: '日本', genres: 'アニメ' })).toBeNull()
+  })
+})
+
+describe('attachKinds', () => {
+  const watchlist = { tabs: [{ name: 'U-NEXT', movies: [{ movie_id: '1', title: 'A' }, { movie_id: '2', title: 'B' }] }] }
+
+  it('movie-meta.json の情報から各作品に種類を付ける', () => {
+    const result = attachKinds(watchlist, { movies: { 1: { countries: ['日本'], genres: ['アニメ'] } } })
+    expect(result.tabs[0].movies.map((movie) => movie.kind)).toEqual(['anime', null])
+    expect(result.tabs[0].movies.map((movie) => movie.countries)).toEqual([['日本'], []])
+  })
+
+  it('movie-meta.json が無くても全作品を種類不明にして返す', () => {
+    expect(attachKinds(watchlist, null).tabs[0].movies.map((movie) => movie.kind)).toEqual([null, null])
   })
 })
