@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
+  animeMinutes,
   applyChange,
   decodeBase64Utf8,
   emptyRecordsFile,
   encodeBase64Utf8,
   excludeWatched,
+  isManualId,
+  newManualId,
   parseRecordsFile,
   todayLocal,
+  watchChangeFromEntry,
 } from './records.js'
+
+// 評価・種類・話数を付ける前の記録を読んだときの値
+const NO_EXTRA = { rating: null, kind: null, episodes: null, episode_minutes: null }
 
 const NOW = '2026-09-26T08:00:00.000Z'
 
@@ -25,7 +32,36 @@ describe('parseRecordsFile', () => {
       watched_on: '2026-09-01',
       minutes: 150,
       updated_at: NOW,
+      ...NO_EXTRA,
     })
+  })
+
+  it('★評価・種類・アニメの話数を読める', () => {
+    const file = parseRecordsFile({
+      version: 1,
+      records: {
+        1: { title: 'A', watched_on: '2026-09-01', minutes: 288, rating: 5, kind: 'anime', episodes: 12, episode_minutes: 24 },
+        2: { title: 'B', watched_on: '2026-09-01', minutes: 120, rating: 3, kind: 'foreign' },
+      },
+    })
+    expect(file.records['1']).toMatchObject({ rating: 5, kind: 'anime', episodes: 12, episode_minutes: 24 })
+    expect(file.records['2']).toMatchObject({ rating: 3, kind: 'foreign', episodes: null, episode_minutes: null })
+  })
+
+  it('範囲外の評価・未知の種類・アニメ以外の話数は null に倒す', () => {
+    const file = parseRecordsFile({
+      version: 1,
+      records: {
+        1: { title: 'A', watched_on: '2026-09-01', minutes: null, rating: 6, kind: 'drama', episodes: 12 },
+        2: { title: 'B', watched_on: '2026-09-01', minutes: null, rating: 3.5, kind: 'japanese', episodes: 3, episode_minutes: 20 },
+        3: { title: 'C', watched_on: '2026-09-01', minutes: null, rating: '4', kind: 'anime', episodes: 0, episode_minutes: -1 },
+        4: { title: 'D', watched_on: '2026-09-01', minutes: null, rating: 0 },
+      },
+    })
+    expect(file.records['1']).toMatchObject(NO_EXTRA)
+    expect(file.records['2']).toMatchObject({ rating: null, kind: 'japanese', episodes: null, episode_minutes: null })
+    expect(file.records['3']).toMatchObject({ rating: null, kind: 'anime', episodes: null, episode_minutes: null })
+    expect(file.records['4']).toMatchObject({ rating: null })
   })
 
   it('形が不正な項目は捨て、正しい項目だけ残す', () => {
@@ -70,8 +106,37 @@ describe('applyChange', () => {
       watched_on: '2026-09-26',
       minutes: 150,
       updated_at: NOW,
+      ...NO_EXTRA,
     })
     expect(before.records).toEqual({})
+  })
+
+  it('watch で★評価・種類・アニメの話数を保存する', () => {
+    const after = applyChange(
+      emptyRecordsFile(),
+      {
+        type: 'watch',
+        movie_id: 'manual-abc',
+        title: '葬送のフリーレン',
+        watched_on: '2026-09-26',
+        minutes: 288,
+        rating: 5,
+        kind: 'anime',
+        episodes: 12,
+        episode_minutes: 24,
+      },
+      NOW,
+    )
+    expect(after.records['manual-abc']).toMatchObject({ minutes: 288, rating: 5, kind: 'anime', episodes: 12, episode_minutes: 24 })
+  })
+
+  it('アニメ以外の記録には話数を保存しない', () => {
+    const after = applyChange(
+      emptyRecordsFile(),
+      { type: 'watch', movie_id: '1', title: 'A', watched_on: '2026-09-26', minutes: 100, kind: 'japanese', episodes: 3, episode_minutes: 30 },
+      NOW,
+    )
+    expect(after.records['1']).toMatchObject({ kind: 'japanese', episodes: null, episode_minutes: null })
   })
 
   it('watch は同じ作品の記録を上書きする', () => {
@@ -96,6 +161,48 @@ describe('applyChange', () => {
     expect(() => applyChange(emptyRecordsFile(), { ...base, minutes: 1.5 }, NOW)).toThrow()
     expect(() => applyChange(emptyRecordsFile(), { ...base, movie_id: '' }, NOW)).toThrow()
     expect(() => applyChange(emptyRecordsFile(), { type: 'other', movie_id: '1' }, NOW)).toThrow()
+  })
+
+  it('不正な評価・種類・話数は受け付けない', () => {
+    const base = { type: 'watch', movie_id: '1', title: 'A', watched_on: '2026-09-01', minutes: 10 }
+    expect(() => applyChange(emptyRecordsFile(), { ...base, rating: 0 }, NOW)).toThrow()
+    expect(() => applyChange(emptyRecordsFile(), { ...base, rating: 6 }, NOW)).toThrow()
+    expect(() => applyChange(emptyRecordsFile(), { ...base, rating: 4.5 }, NOW)).toThrow()
+    expect(() => applyChange(emptyRecordsFile(), { ...base, kind: 'drama' }, NOW)).toThrow()
+    expect(() => applyChange(emptyRecordsFile(), { ...base, kind: 'anime', episodes: 0 }, NOW)).toThrow()
+    expect(() => applyChange(emptyRecordsFile(), { ...base, kind: 'anime', episode_minutes: -1 }, NOW)).toThrow()
+  })
+})
+
+describe('watchChangeFromEntry', () => {
+  it('記録を書き戻す変更を作り、当て直すと同じ記録に戻る', () => {
+    const entry = { title: 'A', image: '', watched_on: '2026-09-01', minutes: 288, updated_at: NOW, rating: 4, kind: 'anime', episodes: 12, episode_minutes: 24 }
+    const restored = applyChange(emptyRecordsFile(), watchChangeFromEntry('1', entry), NOW)
+    expect(restored.records['1']).toEqual(entry)
+  })
+
+  it('評価・種類の無い古い記録も書き戻せる', () => {
+    const change = watchChangeFromEntry('1', { title: 'A', image: '', watched_on: '2026-09-01', minutes: 90 })
+    expect(change).toMatchObject({ type: 'watch', movie_id: '1', ...NO_EXTRA })
+  })
+})
+
+describe('手で追加した作品の ID', () => {
+  it('manual- で始まる重ならない ID を作り、見分けられる', () => {
+    const id = newManualId(1_780_000_000_000, () => 0.5)
+    expect(id).toMatch(/^manual-[0-9a-z]+$/)
+    expect(isManualId(id)).toBe(true)
+    expect(isManualId('83583')).toBe(false)
+    expect(newManualId(1, () => 0.1)).not.toBe(newManualId(1, () => 0.2))
+  })
+})
+
+describe('animeMinutes', () => {
+  it('話数 × 1 話の分数。どちらかが不明なら null', () => {
+    expect(animeMinutes(12, 24)).toBe(288)
+    expect(animeMinutes(1, 107)).toBe(107)
+    expect(animeMinutes(null, 24)).toBeNull()
+    expect(animeMinutes(12, null)).toBeNull()
   })
 })
 

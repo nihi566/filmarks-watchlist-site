@@ -11,10 +11,13 @@ import { PAGES } from './navigation.js'
 import WatchlistPage from './pages/WatchlistPage.jsx'
 import RecordsPage from './pages/RecordsPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
+import RecommendPage from './pages/RecommendPage.jsx'
 import { useRecords } from './records/useRecords.js'
 import { clearToken, loadToken, storeToken } from './records/token.js'
+import { useWatchlist } from './useWatchlist.js'
+import { loadLlmSettings, normalizeLlmSettings, storeLlmSettings } from './llm/settings.js'
 
-// ページは location.hash の 3 値だけなので、ルーターを入れずに hashchange で切り替える
+// ページは location.hash の 4 値だけなので、ルーターを入れずに hashchange で切り替える
 function pageFromHash(hash) {
   return PAGES.find((page) => page.hash === hash)?.id ?? 'watchlist'
 }
@@ -37,6 +40,9 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [token, setToken] = useState(loadToken)
   const records = useRecords(token)
+  // ウォッチリストは一覧とおすすめ（候補）の両方で使うので、ここで 1 回だけ読み込む
+  const watchlist = useWatchlist()
+  const [llmSettings, setLlmSettings] = useState(loadLlmSettings)
   const searchRef = useRef(null)
 
   const saveToken = (value) => {
@@ -48,6 +54,12 @@ export default function App() {
   const removeToken = () => {
     if (!clearToken()) return false
     setToken('')
+    return true
+  }
+
+  const saveLlmSettings = (value) => {
+    if (!storeLlmSettings(value)) return false
+    setLlmSettings(normalizeLlmSettings(value))
     return true
   }
 
@@ -92,9 +104,18 @@ export default function App() {
 
       <AppMenu open={menuOpen} onClose={() => setMenuOpen(false)} currentPage={page} />
 
-      {page === 'watchlist' && <WatchlistPage searchRef={searchRef} records={records} />}
+      {page === 'watchlist' && <WatchlistPage searchRef={searchRef} records={records} watchlist={watchlist} />}
       {page === 'records' && <RecordsPage records={records} />}
-      {page === 'settings' && <SettingsPage token={token} onSaveToken={saveToken} onClearToken={removeToken} />}
+      {page === 'recommend' && <RecommendPage records={records} watchlist={watchlist} llmSettings={llmSettings} />}
+      {page === 'settings' && (
+        <SettingsPage
+          token={token}
+          onSaveToken={saveToken}
+          onClearToken={removeToken}
+          llmSettings={llmSettings}
+          onSaveLlmSettings={saveLlmSettings}
+        />
+      )}
     </Box>
   )
 }

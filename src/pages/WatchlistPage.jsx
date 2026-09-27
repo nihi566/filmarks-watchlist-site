@@ -32,60 +32,18 @@ import UpdateIcon from '@mui/icons-material/Update'
 import { visuallyHidden } from '@mui/utils'
 import { serviceIconUrl } from '../serviceIcons.js'
 import WatchDialog from '../components/WatchDialog.jsx'
+import FilterButton from '../components/FilterButton.jsx'
 import { excludeWatched } from '../records/records.js'
 import { MOVIE_ORDERS, sortMovies } from '../movieOrder.js'
 import { recordsErrorMessage } from '../records/github.js'
 import { describeFetchedAt } from '../fetchedAt.js'
+import { filmarksMovieUrl } from '../filmarks.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
   { value: 'count', label: '作品数の多い順' },
   { value: 'name', label: 'サービス名順' },
 ]
-
-function loadError(kind, status) {
-  return Object.assign(new Error(kind), { kind, status })
-}
-
-// サムネ URL は外部（scraper）由来なので https の URL だけを採用し、それ以外は代替表示に倒す
-function safeImageUrl(value) {
-  return typeof value === 'string' && value.startsWith('https://') ? value : ''
-}
-
-// watchlist.json はこのリポジトリ外（scraper）が生成するため、形が想定外でも
-// 一覧描画（localeCompare / toLowerCase 等）が例外を投げて白画面に
-// ならないよう、取得直後の境界で構造を検証し title を文字列へ正規化する
-function normalizeWatchlist(json) {
-  if (!json || !Array.isArray(json.tabs)) throw loadError('parse')
-  return {
-    ...json,
-    tabs: json.tabs.map((tab) => ({
-      ...tab,
-      name: String(tab?.name ?? ''),
-      movies: Array.isArray(tab?.movies)
-        ? tab.movies.map((movie) => ({
-            ...movie,
-            title: String(movie?.title ?? ''),
-            image: safeImageUrl(movie?.image),
-          }))
-        : [],
-    })),
-  }
-}
-
-// 例外の英語メッセージは画面に出さず、失敗の段階ごとに決めた日本語だけを表示する
-function loadErrorMessage(err) {
-  switch (err.kind) {
-    case 'http':
-      return `ウォッチリストを取得できませんでした（HTTP ${err.status}）。時間をおいて再試行してください。`
-    case 'network':
-      return 'サーバーに接続できませんでした。インターネット接続を確認して再試行してください。'
-    case 'parse':
-      return 'ウォッチリストのデータを読み取れませんでした。時間をおいて再試行してください。'
-    default:
-      return 'ウォッチリストを読み込めませんでした。時間をおいて再試行してください。'
-  }
-}
 
 // 複数サービスに重複して載っている作品は 1 件と数える（「すべて」の件数）
 function countUniqueMovies(tabs) {
@@ -200,7 +158,7 @@ function MovieRow({ movie, onWatch, canWatch }) {
     >
     <ListItemButton
       component="a"
-      href={`https://filmarks.com/movies/${movie.movie_id}`}
+      href={filmarksMovieUrl(movie.movie_id)}
       target="_blank"
       rel="noopener"
       sx={{ gap: 1.5, py: 0.5, pl: 2, pr: '92px !important' }}
@@ -270,26 +228,6 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
   )
 }
 
-function FilterButton({ selected, children, ...props }) {
-  return (
-    <Button
-      size="small"
-      variant={selected ? 'contained' : 'outlined'}
-      disableElevation
-      sx={{
-        borderRadius: 999,
-        px: 1.75,
-        height: 32,
-        fontWeight: 700,
-        ...(selected ? {} : { bgcolor: 'background.paper', color: 'text.primary', borderColor: 'divider' }),
-      }}
-      {...props}
-    >
-      {children}
-    </Button>
-  )
-}
-
 // 一覧がいつ時点の Filmarks か（scraper が最後に取得した日時）を、検索欄より上で見落とさない位置に出す
 function FetchedAt({ value }) {
   const fetched = describeFetchedAt(value)
@@ -313,10 +251,8 @@ function FetchedAt({ value }) {
   )
 }
 
-export default function WatchlistPage({ searchRef, records }) {
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
+export default function WatchlistPage({ searchRef, records, watchlist }) {
+  const { data, error, retry } = watchlist
   const [query, setQuery] = useState('')
   const [serviceFilter, setServiceFilter] = useState(null)
   const [sortKey, setSortKey] = useState('count')
@@ -356,37 +292,6 @@ export default function WatchlistPage({ searchRef, records }) {
   const closeNotice = () => {
     restoreOnExit.current = Boolean(noticeRoot.current?.contains(document.activeElement))
     setNotice(null)
-  }
-
-  useEffect(() => {
-    // 再試行を連打したとき、古いリクエストの結果で新しい状態を上書きしない
-    let active = true
-    fetch(`${import.meta.env.BASE_URL}watchlist.json`, { cache: 'no-cache' })
-      .catch(() => {
-        throw loadError('network')
-      })
-      .then((res) => {
-        if (!res.ok) throw loadError('http', res.status)
-        return res.json().catch(() => {
-          throw loadError('parse')
-        })
-      })
-      .then((json) => normalizeWatchlist(json))
-      .then((normalized) => {
-        if (!active) return
-        setData(normalized)
-      })
-      .catch((err) => {
-        if (active) setError(loadErrorMessage(err))
-      })
-    return () => {
-      active = false
-    }
-  }, [reloadKey])
-
-  const retry = () => {
-    setError(null)
-    setReloadKey((key) => key + 1)
   }
 
   const keyword = query.trim()

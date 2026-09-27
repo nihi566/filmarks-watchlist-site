@@ -29,8 +29,45 @@ describe('summarizeMonth', () => {
   })
 
   it('記録が無い月・記録自体が無いときは 0 件', () => {
-    expect(summarizeMonth(records, 2026, 7)).toEqual({ count: 0, minutes: 0, unknownCount: 0, days: [] })
+    expect(summarizeMonth(records, 2026, 7)).toEqual({ count: 0, minutes: 0, unknownCount: 0, episodes: 0, kinds: [], days: [] })
     expect(summarizeMonth(null, 2026, 9).count).toBe(0)
+  })
+})
+
+describe('種類ごとの内訳', () => {
+  const mixed = {
+    1: { title: 'フリーレン', watched_on: '2026-09-20', minutes: 288, rating: 5, kind: 'anime', episodes: 12 },
+    2: { title: '劇場アニメ', watched_on: '2026-09-10', minutes: 107, rating: 4, kind: 'anime', episodes: 1 },
+    3: { title: '邦画', watched_on: '2026-09-05', minutes: 120, rating: 3, kind: 'japanese', episodes: null },
+    4: { title: '古い記録', watched_on: '2026-09-01', minutes: 90 },
+    5: { title: '洋画', watched_on: '2026-08-01', minutes: 150, rating: 2, kind: 'foreign' },
+  }
+
+  it('月の種類ごとの本数とアニメの話数を、アニメ・邦画・洋画・未分類の順で返す', () => {
+    const month = summarizeMonth(mixed, 2026, 9)
+    expect(month.episodes).toBe(13)
+    expect(month.kinds).toEqual([
+      { kind: 'anime', count: 2, episodes: 13 },
+      { kind: 'japanese', count: 1, episodes: 0 },
+      { kind: 'none', count: 1, episodes: 0 },
+    ])
+  })
+
+  it('日ごとの作品に★評価・種類・話数を含める', () => {
+    const month = summarizeMonth(mixed, 2026, 9)
+    const day = month.days.find((item) => item.date === '2026-09-20')
+    expect(day.items[0]).toEqual({ movie_id: '1', title: 'フリーレン', image: undefined, minutes: 288, rating: 5, kind: 'anime', episodes: 12 })
+    const old = month.days.find((item) => item.date === '2026-09-01')
+    expect(old.items[0]).toMatchObject({ rating: null, kind: null, episodes: null })
+  })
+
+  it('年の内訳も返す', () => {
+    expect(summarizeYear(mixed, 2026).kinds.map((item) => [item.kind, item.count])).toEqual([
+      ['anime', 2],
+      ['japanese', 1],
+      ['foreign', 1],
+      ['none', 1],
+    ])
   })
 })
 
