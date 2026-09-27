@@ -68,7 +68,12 @@ function RecommendationCard({ item, rank }) {
           {item.country && <Chip size="small" variant="outlined" label={item.country} />}
           {movie?.runtime_min ? <Chip size="small" label={`${movie.runtime_min}分`} /> : null}
           {movie && (
-            <Chip size="small" label={movie.services.length > 0 ? movie.services.join('・') : '未配信'} />
+            // サービスが多いと 1 行に収まらないので、チップの中で折り返す（画面の横にはみ出さないように）
+            <Chip
+              size="small"
+              label={movie.services.length > 0 ? movie.services.join('・') : '未配信'}
+              sx={{ height: 'auto', maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
+            />
           )}
           {!movie && <Chip size="small" label="ウォッチリスト外" />}
         </Box>
