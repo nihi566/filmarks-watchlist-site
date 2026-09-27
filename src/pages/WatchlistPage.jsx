@@ -350,9 +350,6 @@ export default function WatchlistPage({ searchRef, records }) {
       .then((normalized) => {
         if (!active) return
         setData(normalized)
-        // 初期表示は作品数が最も多いグループだけを開く
-        const first = sortGroups(normalized.tabs, 'count')[0]
-        setExpandedName(first ? first.name : null)
       })
       .catch((err) => {
         if (active) setError(loadErrorMessage(err))
