@@ -144,7 +144,9 @@ export default function RecordsPage({ records }) {
   const today = todayLocal()
   const [thisYear, thisMonth] = today.split('-').map(Number)
   const [period, setPeriod] = useState({ year: thisYear, month: thisMonth })
+  // 閉じても item は残す（閉じるアニメーションの間に項目名が入れ替わらないように）
   const [menu, setMenu] = useState(null)
+  const closeMenu = () => setMenu((current) => current && { ...current, open: false })
   const [editTarget, setEditTarget] = useState(null)
   const [notice, setNotice] = useState(null)
   const [kindFilter, setKindFilter] = useState('all')
@@ -168,7 +170,7 @@ export default function RecordsPage({ records }) {
 
   // ウォッチリスト由来の作品は「見たい」に戻し、手で追加した作品は記録を消す（どちらも元に戻せる）
   const unwatch = async (item) => {
-    setMenu(null)
+    closeMenu()
     const entry = entries[item.movie_id]
     const manual = isManualId(item.movie_id)
     try {
@@ -351,7 +353,7 @@ export default function RecordsPage({ records }) {
                           <IconButton
                             edge="end"
                             aria-label={`「${item.title}」の操作`}
-                            onClick={(event) => setMenu({ anchor: event.currentTarget, item })}
+                            onClick={(event) => setMenu({ anchor: event.currentTarget, item, open: true })}
                           >
                             <MoreVertIcon />
                           </IconButton>
@@ -397,11 +399,11 @@ export default function RecordsPage({ records }) {
         )}
       </Paper>
 
-      <Menu anchorEl={menu?.anchor} open={Boolean(menu)} onClose={() => setMenu(null)}>
+      <Menu anchorEl={menu?.anchor} open={Boolean(menu?.open)} onClose={closeMenu}>
         <MenuItem
           onClick={() => {
             const { item } = menu
-            setMenu(null)
+            closeMenu()
             setEditTarget({ movie: item, initial: entries[item.movie_id] })
           }}
         >
