@@ -42,6 +42,7 @@ import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
 import { matchesKeyword, normalizeForSearch } from '../searchText.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
+import { readViewFromSearch, viewToSearch, withSearch } from '../watchlistUrl.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
@@ -278,16 +279,18 @@ function FetchedAt({ value }) {
 
 export default function WatchlistPage({ searchRef, records, watchlist }) {
   const { data, error, retry } = watchlist
-  const [query, setQuery] = useState('')
-  const [serviceFilter, setServiceFilter] = useState(null)
-  const [sortKey, setSortKey] = useState('count')
-  const [movieOrder, setMovieOrder] = useState('title')
+  // 絞り込み・検索・並び順は URL のクエリから始める（リロード・共有・他ページから戻ったときに同じ状態で開く）
+  const [initialView] = useState(() => readViewFromSearch(window.location.search))
+  const [query, setQuery] = useState(initialView.query)
+  const [serviceFilter, setServiceFilter] = useState(initialView.service)
+  const [sortKey, setSortKey] = useState(initialView.sort)
+  const [movieOrder, setMovieOrder] = useState(initialView.order)
   // 同時に開けるグループは 1 つだけ（別のグループを開くと前のグループは閉じる）
-  const [expandedName, setExpandedName] = useState(null)
+  const [expandedName, setExpandedName] = useState(initialView.service)
   // 検索中は一致したグループを既定で開き、利用者が閉じたものだけを覚える
   const [collapsedInSearch, setCollapsedInSearch] = useState(new Set())
   const [serviceMenuAnchor, setServiceMenuAnchor] = useState(null)
-  const [kindFilter, setKindFilter] = useState('all')
+  const [kindFilter, setKindFilter] = useState(initialView.kind)
   const [kindMenuAnchor, setKindMenuAnchor] = useState(null)
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
   // 「見た」に記録しようとしている作品と、記録後の通知（元に戻す用の作品を持つ）
@@ -344,6 +347,29 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   }, [unwatchedTabs, kindFilter])
   const uniqueCount = useMemo(() => countUniqueMovies(visibleTabs), [visibleTabs])
   const allGroups = useMemo(() => sortGroups(visibleTabs, sortKey), [visibleTabs, sortKey])
+
+  // URL のサービス名がもう一覧に無い（配信終了・名前の変更・書き間違い）ときは、読み込んだ時点で 1 回だけ絞り込みを外す
+  // （開いた後に最後の 1 件を「見た」にしてグループが消えた場合は、選んだサービスのまま残す）
+  const serviceChecked = useRef(false)
+  useEffect(() => {
+    if (!data || serviceChecked.current) return
+    serviceChecked.current = true
+    if (serviceFilter && !data.tabs.some((tab) => tab.name === serviceFilter)) {
+      setServiceFilter(null)
+      setExpandedName(null)
+    }
+  }, [data, serviceFilter])
+
+  // 見え方が変わるたびに URL のクエリを書き換える（履歴は増やさない）
+  useEffect(() => {
+    const search = viewToSearch({ service: serviceFilter, kind: kindFilter, query, sort: sortKey, order: movieOrder })
+    if (search === window.location.search) return
+    try {
+      window.history.replaceState(window.history.state, '', withSearch(window.location, search))
+    } catch {
+      // Safari は短時間に replaceState を呼びすぎると SecurityError を投げる。URL が古いままになるだけなので一覧は止めない
+    }
+  }, [serviceFilter, kindFilter, query, sortKey, movieOrder])
 
   const groups = useMemo(() => {
     const base = serviceFilter ? allGroups.filter((tab) => tab.name === serviceFilter) : allGroups
