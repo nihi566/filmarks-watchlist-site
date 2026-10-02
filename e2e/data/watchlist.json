@@ -4,29 +4,88 @@
     {
       "name": "U-NEXT",
       "movies": [
-        { "movie_id": "564", "title": "20世紀少年 ＜第1章＞ 終わりの始まり", "image": "", "clip_order": 3, "runtime_min": 142 },
-        { "movie_id": "1266", "title": "インターステラー", "image": "", "clip_order": 0, "runtime_min": 169 },
-        { "movie_id": "9001", "title": "種類の分からない作品", "image": "", "clip_order": 5 }
+        {
+          "movie_id": "564",
+          "title": "20世紀少年 ＜第1章＞ 終わりの始まり",
+          "image": "",
+          "clip_order": 3,
+          "runtime_min": 142
+        },
+        {
+          "movie_id": "1266",
+          "title": "インターステラー",
+          "image": "",
+          "clip_order": 0,
+          "runtime_min": 169,
+          "watch_url": "https://video.unext.jp/title/SID0000001"
+        },
+        {
+          "movie_id": "9001",
+          "title": "種類の分からない作品",
+          "image": "",
+          "clip_order": 5
+        }
       ]
     },
     {
       "name": "Hulu",
       "movies": [
-        { "movie_id": "13580", "title": "PERFECT BLUE", "image": "", "clip_order": 2, "runtime_min": 81 },
-        { "movie_id": "1266", "title": "インターステラー", "image": "", "clip_order": 0, "runtime_min": 169 },
-        { "movie_id": "9002", "title": "君の名は。", "image": "", "clip_order": 1, "runtime_min": 107 }
+        {
+          "movie_id": "13580",
+          "title": "PERFECT BLUE",
+          "image": "",
+          "clip_order": 2,
+          "runtime_min": 81,
+          "watch_url": "https://www.hulu.jp/perfect-blue-anime"
+        },
+        {
+          "movie_id": "1266",
+          "title": "インターステラー",
+          "image": "",
+          "clip_order": 0,
+          "runtime_min": 169,
+          "watch_url": "https://www.hulu.jp/interstellar"
+        },
+        {
+          "movie_id": "9002",
+          "title": "君の名は。",
+          "image": "",
+          "clip_order": 1,
+          "runtime_min": 107
+        }
       ]
     },
     {
       "name": "Netflix",
       "movies": [
-        { "movie_id": "564", "title": "20世紀少年 ＜第1章＞ 終わりの始まり", "image": "", "clip_order": 3, "runtime_min": 142 },
-        { "movie_id": "13580", "title": "PERFECT BLUE", "image": "", "clip_order": 2, "runtime_min": 81 }
+        {
+          "movie_id": "564",
+          "title": "20世紀少年 ＜第1章＞ 終わりの始まり",
+          "image": "",
+          "clip_order": 3,
+          "runtime_min": 142,
+          "watch_url": "https://www.netflix.com/jp/title/70118386"
+        },
+        {
+          "movie_id": "13580",
+          "title": "PERFECT BLUE",
+          "image": "",
+          "clip_order": 2,
+          "runtime_min": 81,
+          "watch_url": "https://www.netflix.com/jp/title/60000043"
+        }
       ]
     },
     {
       "name": "未配信",
-      "movies": [{ "movie_id": "9003", "title": "配信の無い作品", "image": "", "clip_order": 4 }]
+      "movies": [
+        {
+          "movie_id": "9003",
+          "title": "配信の無い作品",
+          "image": "",
+          "clip_order": 4
+        }
+      ]
     }
   ]
 }

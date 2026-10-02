@@ -6,8 +6,8 @@ export function loadError(kind, status) {
   return Object.assign(new Error(kind), { kind, status })
 }
 
-// サムネ URL は外部（scraper）由来なので https の URL だけを採用し、それ以外は代替表示に倒す
-export function safeImageUrl(value) {
+// サムネ・観るページの URL は外部（scraper）由来なので https の URL だけを採用し、それ以外は空（出さない）に倒す
+export function safeHttpsUrl(value) {
   return typeof value === 'string' && value.startsWith('https://') ? value : ''
 }
 
@@ -25,7 +25,9 @@ export function normalizeWatchlist(json) {
         ? tab.movies.map((movie) => ({
             ...movie,
             title: String(movie?.title ?? ''),
-            image: safeImageUrl(movie?.image),
+            image: safeHttpsUrl(movie?.image),
+            // そのサービスでこの作品を観るページ（Filmarks の配信一覧の「今すぐ観る」）
+            watch_url: safeHttpsUrl(movie?.watch_url),
           }))
         : [],
     })),

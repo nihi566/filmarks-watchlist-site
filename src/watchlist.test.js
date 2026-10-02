@@ -22,6 +22,16 @@ describe('normalizeWatchlist', () => {
     expect(result.tabs[0].movies[0]).toMatchObject({ title: '1', image: '' })
   })
 
+  it('観るページの URL は https のものだけ残す', () => {
+    const movies = ['https://www.hulu.jp/a', 'javascript:alert(1)', 'http://a', 123, undefined].map((watch_url, i) => ({
+      movie_id: String(i),
+      title: 'A',
+      watch_url,
+    }))
+    const result = normalizeWatchlist({ tabs: [{ name: 'Hulu', movies }] })
+    expect(result.tabs[0].movies.map((movie) => movie.watch_url)).toEqual(['https://www.hulu.jp/a', '', '', '', ''])
+  })
+
   // 白画面対策（backlog 20260924-f-77e362）: サービス名が文字列以外で届いても描画できる形にする
   it('サービス名を文字列にし、無ければ空文字にする', () => {
     const result = normalizeWatchlist({ tabs: [{ name: 123, movies: [] }, { name: { a: 1 }, movies: [] }, { movies: [] }] })

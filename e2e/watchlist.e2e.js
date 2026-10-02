@@ -22,7 +22,7 @@ test.describe('ウォッチリスト', () => {
     await page.getByRole('button', { name: 'タイトル検索へ移動' }).click()
     await expect(page.getByRole('searchbox', { name: 'タイトルで検索' })).toBeFocused()
     await page.keyboard.type('20世紀少年')
-    await expect(page.getByRole('link', { name: /20世紀少年 ＜第1章＞/ }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /^20世紀少年 ＜第1章＞/ }).first()).toBeVisible()
     await page.getByRole('searchbox').fill('zzzzzzzz')
     await expect(page.getByText('「zzzzzzzz」に一致する作品はありません')).toBeVisible()
     expect(errors).toEqual([])
@@ -32,7 +32,7 @@ test.describe('ウォッチリスト', () => {
     await page.goto('./')
     for (const keyword of ['いんたー', 'ｲﾝﾀｰ']) {
       await page.getByRole('searchbox').fill(keyword)
-      await expect(page.getByRole('link', { name: /インターステラー/ }).first()).toBeVisible()
+      await expect(page.getByRole('link', { name: /^インターステラー/ }).first()).toBeVisible()
     }
   })
 
@@ -47,14 +47,29 @@ test.describe('ウォッチリスト', () => {
     await page.getByRole('button', { name: '種類別' }).click()
     await page.getByRole('menuitem', { name: /アニメ/ }).click()
     await expect(page.getByRole('button', { name: 'アニメ', exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: /PERFECT BLUE/ })).toBeVisible()
-    await expect(page.getByRole('link', { name: /20世紀少年/ })).toHaveCount(0)
+    await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^20世紀少年/ })).toHaveCount(0)
 
     await page.getByRole('button', { name: /^すべて \d+/ }).click()
     await page.getByRole('button', { name: '並び替え' }).click()
     await page.getByRole('menuitem', { name: 'サービス名順' }).click()
     await expect(page.getByRole('menu')).toHaveCount(0)
     expect(errors).toEqual([])
+  })
+
+  test('サービスで観るページへのリンクがある作品だけ「観る」が出る', async ({ page }) => {
+    await page.goto('./')
+    await page.getByRole('button', { name: /^Hulu/ }).click()
+    const watch = page.getByRole('link', { name: 'Huluで「PERFECT BLUE」を観る（新しいタブで開きます）' })
+    await expect(watch).toHaveAttribute('href', 'https://www.hulu.jp/perfect-blue-anime')
+    await expect(watch).toHaveAttribute('target', '_blank')
+    await expect(page.getByRole('link', { name: /「君の名は。」を観る/ })).toHaveCount(0)
+    // 同じ作品でもサービスごとに別のリンク
+    await page.getByRole('button', { name: /^Netflix/ }).click()
+    await expect(page.getByRole('link', { name: 'Netflixで「PERFECT BLUE」を観る（新しいタブで開きます）' })).toHaveAttribute(
+      'href',
+      'https://www.netflix.com/jp/title/60000043',
+    )
   })
 
   test('作品を最近クリップした順に並べられる', async ({ page }) => {

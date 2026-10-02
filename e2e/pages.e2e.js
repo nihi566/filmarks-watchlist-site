@@ -16,10 +16,10 @@ test.describe('視聴記録', () => {
     }
     await page.goto('./#/records')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('視聴記録')
-    await expect(page.getByRole('link', { name: /PERFECT BLUE/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toBeVisible()
     await expect(page.getByRole('button', { name: '次の月' })).toBeDisabled()
     await page.getByRole('button', { name: '前の月' }).click()
-    await expect(page.getByRole('link', { name: /20世紀少年/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^20世紀少年/ })).toBeVisible()
     await page.getByRole('button', { name: 'アニメ', exact: true }).click()
     await expect(page.getByText('この月に、この種類の視聴記録はありません。')).toBeVisible()
     expect(errors).toEqual([])
@@ -81,7 +81,7 @@ test.describe('視聴記録', () => {
     await expect(
       page.getByRole('heading', { level: 2, name: `${lastDay.getFullYear()}年${lastDay.getMonth() + 1}月` }),
     ).toBeVisible()
-    await expect(page.getByRole('link', { name: /PERFECT BLUE/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toBeVisible()
   })
 
   test('見たいに戻すと、ウォッチリストに戻っている', async ({ page, github }) => {
