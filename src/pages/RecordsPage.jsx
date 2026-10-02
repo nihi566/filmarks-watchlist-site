@@ -23,6 +23,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert'
 import MovieIcon from '@mui/icons-material/Movie'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import AddIcon from '@mui/icons-material/Add'
+import CloseIcon from '@mui/icons-material/Close'
 import Rating from '@mui/material/Rating'
 import { visuallyHidden } from '@mui/utils'
 import WatchDialog from '../components/WatchDialog.jsx'
@@ -281,7 +282,8 @@ export default function RecordsPage({ records }) {
       )}
 
       <Box role="group" aria-label="種類で絞り込む" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        {[...KIND_FILTERS, ...(hasUnclassified ? [{ value: 'none', label: '未分類' }] : [])].map((filter) => (
+        {/* 未分類で絞り込んだまま最後の 1 件を戻しても、選択中のボタンとしては残す */}
+        {[...KIND_FILTERS, ...(hasUnclassified || kindFilter === 'none' ? [{ value: 'none', label: '未分類' }] : [])].map((filter) => (
           <FilterButton
             key={filter.value}
             selected={kindFilter === filter.value}
@@ -502,9 +504,15 @@ export default function RecordsPage({ records }) {
             onClose={closeNotice}
             action={
               notice.undo ? (
-                <Button ref={undoButton} color="inherit" size="small" onClick={() => undo(notice.undo)}>
-                  {notice.severity === 'error' ? '再試行' : '元に戻す'}
-                </Button>
+                // action を渡すと Alert の閉じるボタンが消えるので自分で置く（再試行の失敗通知は自動では閉じないため）
+                <>
+                  <Button ref={undoButton} color="inherit" size="small" onClick={() => undo(notice.undo)}>
+                    {notice.severity === 'error' ? '再試行' : '元に戻す'}
+                  </Button>
+                  <IconButton color="inherit" size="small" aria-label="閉じる" onClick={closeNotice}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </>
               ) : undefined
             }
             sx={{ width: '100%' }}
