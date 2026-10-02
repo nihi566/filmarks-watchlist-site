@@ -2,6 +2,9 @@ const MINUTE = 60 * 1000
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
+// 取得からこの日数以上たっていたら、scraper（update.bat）が止まっている可能性があるとして注意を出す
+export const STALE_AFTER_DAYS = 3
+
 // generated_at は "YYYY-MM-DD HH:MM:SS"（タイムゾーン無し）。scraper と閲覧者は同じ日本時間の前提で
 // ローカル時刻として読み、表示用の日時と経過時間を返す。読めない値は null（呼び出し側で「不明」と出す）
 export function describeFetchedAt(value, now = new Date()) {
@@ -14,9 +17,11 @@ export function describeFetchedAt(value, now = new Date()) {
   }
 
   const pad = (n) => String(n).padStart(2, '0')
+  const elapsed = now - fetched
   return {
     date: `${y}/${pad(mo)}/${pad(d)} ${pad(h)}:${pad(mi)}`,
-    ago: formatAgo(now - fetched),
+    ago: formatAgo(elapsed),
+    stale: elapsed >= STALE_AFTER_DAYS * DAY,
   }
 }
 

@@ -36,7 +36,7 @@ import FilterButton from '../components/FilterButton.jsx'
 import { excludeWatched } from '../records/records.js'
 import { MOVIE_ORDERS, sortMovies } from '../movieOrder.js'
 import { recordsErrorMessage } from '../records/github.js'
-import { describeFetchedAt } from '../fetchedAt.js'
+import { STALE_AFTER_DAYS, describeFetchedAt } from '../fetchedAt.js'
 import { filmarksMovieUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
@@ -243,22 +243,36 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
 // 一覧がいつ時点の Filmarks か（scraper が最後に取得した日時）を、検索欄より上で見落とさない位置に出す
 function FetchedAt({ value }) {
   const fetched = describeFetchedAt(value)
+  const label = (
+    <>
+      Filmarks からの取得:{' '}
+      {fetched ? (
+        <>
+          <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>
+            {fetched.date}
+          </Box>
+          （{fetched.ago}）
+        </>
+      ) : (
+        '日時不明'
+      )}
+    </>
+  )
+  // 取得が止まっていても「N日前」を読み取らないと気づけないので、古いときは注意として出す
+  if (fetched?.stale) {
+    return (
+      <Alert severity="warning" sx={{ mb: 1.5, py: 0 }}>
+        {label}
+        <Box component="span" sx={{ display: 'block' }}>
+          データが古い可能性があります（{STALE_AFTER_DAYS}日以上更新されていません）
+        </Box>
+      </Alert>
+    )
+  }
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5, color: 'text.secondary' }}>
       <UpdateIcon fontSize="small" />
-      <Typography variant="body2">
-        Filmarks からの取得:{' '}
-        {fetched ? (
-          <>
-            <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>
-              {fetched.date}
-            </Box>
-            （{fetched.ago}）
-          </>
-        ) : (
-          '日時不明'
-        )}
-      </Typography>
+      <Typography variant="body2">{label}</Typography>
     </Box>
   )
 }
