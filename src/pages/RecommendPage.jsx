@@ -22,6 +22,8 @@ import { KIND_FILTERS, kindLabel } from '../records/kinds.js'
 import { recordsErrorMessage } from '../records/github.js'
 import { uniqueMovies } from '../watchlist.js'
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
+import { focusFirst } from '../focusFirst.js'
+import { useRetryFocus } from '../useRetryFocus.js'
 import { chatJson, llmErrorMessage } from '../llm/client.js'
 import { RECOMMEND_MODES, buildRecommendationRequest, parseRecommendations, pickCandidates } from '../llm/recommend.js'
 
@@ -102,6 +104,13 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
   const [elapsed, setElapsed] = useState(0)
   const [received, setReceived] = useState(0)
   const controller = useRef(null)
+  // 再試行で消えた Alert の代わりに、成功したら直前の条件（選択中の種類・選び方）へ、また失敗したら新しい「再試行」へ戻す
+  const recordsRetry = useRetryFocus(records.status, () =>
+    focusFirst(['[role="group"][aria-label="種類"] [aria-pressed="true"]']),
+  )
+  const watchlistRetry = useRetryFocus(watchlist.data ? 'ready' : watchlist.error ? 'error' : 'loading', () =>
+    focusFirst(['[role="group"][aria-label="どこから選ぶか"] [aria-pressed="true"]']),
+  )
 
   // 画面を離れたら問い合わせを止める（ローカル LLM の計算を無駄に続けさせない）
   useEffect(() => () => controller.current?.abort(), [])
@@ -184,7 +193,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
         <Alert
           severity="warning"
           action={
-            <Button color="inherit" size="small" onClick={records.reload}>
+            <Button ref={recordsRetry.buttonRef} color="inherit" size="small" onClick={recordsRetry.wrapRetry(records.reload)}>
               再試行
             </Button>
           }
@@ -214,7 +223,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
           <Alert
             severity="error"
             action={
-              <Button color="inherit" size="small" onClick={watchlist.retry}>
+              <Button ref={watchlistRetry.buttonRef} color="inherit" size="small" onClick={watchlistRetry.wrapRetry(watchlist.retry)}>
                 再試行
               </Button>
             }

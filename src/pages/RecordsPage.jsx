@@ -34,6 +34,7 @@ import { KIND_FILTERS, RATING_LABELS, filterRecordsByKind, kindLabel, matchesKin
 import { addMonths, formatMinutes, summarizeMonth, summarizeYear, weekdayLabel } from '../records/summary.js'
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
+import { useRetryFocus } from '../useRetryFocus.js'
 
 // 見たいに戻した作品の行が消えた後のフォーカスの移し先の目印（各作品の ︙ ボタン）
 const menuButtonSelector = (movieId) => `[data-menu-id="${CSS.escape(movieId)}"]`
@@ -158,6 +159,8 @@ export default function RecordsPage({ records }) {
   // 見たいに戻した作品の行が消えた後のフォーカスの移し先（次・前の作品の ︙ → 作品を追加）
   const returnFocus = useRef([])
   const addButton = useRef(null)
+  // 再試行で消えた Alert の代わりに、成功したら「追加」へ、また失敗したら新しい「再試行」へ戻す
+  const recordsRetry = useRetryFocus(records.status, () => addButton.current?.focus())
   const undoButton = useRef(null)
   const noticeRoot = useRef(null)
   // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
@@ -248,7 +251,7 @@ export default function RecordsPage({ records }) {
           <Alert
             severity="error"
             action={
-              <Button color="inherit" size="small" onClick={records.reload}>
+              <Button ref={recordsRetry.buttonRef} color="inherit" size="small" onClick={recordsRetry.wrapRetry(records.reload)}>
                 再試行
               </Button>
             }
@@ -272,7 +275,7 @@ export default function RecordsPage({ records }) {
         <Alert
           severity="warning"
           action={
-            <Button color="inherit" size="small" onClick={records.reload}>
+            <Button ref={recordsRetry.buttonRef} color="inherit" size="small" onClick={recordsRetry.wrapRetry(records.reload)}>
               再試行
             </Button>
           }
