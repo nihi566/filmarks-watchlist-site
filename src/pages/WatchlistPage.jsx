@@ -363,7 +363,12 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   // 見え方が変わるたびに URL のクエリを書き換える（履歴は増やさない）
   useEffect(() => {
     const search = viewToSearch({ service: serviceFilter, kind: kindFilter, query, sort: sortKey, order: movieOrder })
-    if (search !== window.location.search) window.history.replaceState(window.history.state, '', withSearch(window.location, search))
+    if (search === window.location.search) return
+    try {
+      window.history.replaceState(window.history.state, '', withSearch(window.location, search))
+    } catch {
+      // Safari は短時間に replaceState を呼びすぎると SecurityError を投げる。URL が古いままになるだけなので一覧は止めない
+    }
   }, [serviceFilter, kindFilter, query, sortKey, movieOrder])
 
   const groups = useMemo(() => {
