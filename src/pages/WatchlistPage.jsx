@@ -39,6 +39,7 @@ import { recordsErrorMessage } from '../records/github.js'
 import { STALE_AFTER_DAYS, describeFetchedAt } from '../fetchedAt.js'
 import { filmarksMovieUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
+import { matchesKeyword, normalizeForSearch } from '../searchText.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 
 const UNAVAILABLE = '未配信'
@@ -84,10 +85,6 @@ function sortGroups(tabs, sortKey) {
 // 押した行が一覧から消えるとフォーカスが body（ページ先頭）へ落ちるので、近くの要素へ移すための目印
 const watchButtonSelector = (movieId) => `[data-watch-id="${CSS.escape(movieId)}"]`
 const groupSummarySelector = (name) => `[data-group-summary="${CSS.escape(name)}"]`
-
-function matchesKeyword(title, needle) {
-  return title.toLowerCase().includes(needle)
-}
 
 function toggled(set, name) {
   const next = new Set(set)
@@ -324,7 +321,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   }
 
   const keyword = query.trim()
-  const needle = keyword.toLowerCase()
+  const needle = normalizeForSearch(keyword)
   const searching = needle !== ''
 
   // 「見た」の作品は一覧・検索・件数のすべてから外す（記録の読込前・失敗時は全件）
