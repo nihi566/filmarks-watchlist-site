@@ -30,6 +30,15 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      # 画面操作の E2E（GitHub API・LLM・watchlist.json は e2e/fixtures.js で差し替え）
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results
+          retention-days: 7
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

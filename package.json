@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "meta": "node scripts/update-movie-meta.js"
+    "meta": "node scripts/update-movie-meta.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
+    "@playwright/test": "1.63.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.1.1",
