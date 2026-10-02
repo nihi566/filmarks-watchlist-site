@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'test-results', 'playwright-report'] },
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
@@ -34,5 +34,11 @@ export default [
     // scripts/ は Node で動かす補助スクリプト
     files: ['scripts/**/*.js'],
     languageOptions: { globals: globals.node },
+  },
+  {
+    // E2E テスト（Playwright）は Node で動き、page.evaluate の中だけがブラウザ
+    files: ['e2e/**/*.js', 'playwright.config.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+    rules: { 'react-hooks/rules-of-hooks': 'off' },
   },
 ]
