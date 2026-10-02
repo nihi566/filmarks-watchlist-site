@@ -39,6 +39,7 @@ import { recordsErrorMessage } from '../records/github.js'
 import { STALE_AFTER_DAYS, describeFetchedAt } from '../fetchedAt.js'
 import { filmarksMovieUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
+import { useRetryFocus } from '../useRetryFocus.js'
 import { matchesKeyword, normalizeForSearch } from '../searchText.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 
@@ -299,6 +300,10 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
   const restoreOnExit = useRef(false)
   const [focusRequest, setFocusRequest] = useState(null)
+  // 再試行で消えた Alert の代わりに、成功したら検索欄へ、また失敗したら新しい「再試行」へ戻す
+  const focusSearch = () => searchRef.current?.focus()
+  const watchlistRetry = useRetryFocus(data ? 'ready' : error ? 'error' : 'loading', focusSearch)
+  const recordsRetry = useRetryFocus(records.status, focusSearch)
 
   // 一覧の描き直しが終わってから移す（元に戻した作品の行は、記録の更新を描いた後にしか無い）
   useEffect(() => {
@@ -416,7 +421,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
         <Alert
           severity="warning"
           action={
-            <Button color="inherit" size="small" onClick={records.reload}>
+            <Button ref={recordsRetry.buttonRef} color="inherit" size="small" onClick={recordsRetry.wrapRetry(records.reload)}>
               再試行
             </Button>
           }
@@ -429,7 +434,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
         <Alert
           severity="error"
           action={
-            <Button color="inherit" size="small" onClick={retry}>
+            <Button ref={watchlistRetry.buttonRef} color="inherit" size="small" onClick={watchlistRetry.wrapRetry(retry)}>
               再試行
             </Button>
           }
