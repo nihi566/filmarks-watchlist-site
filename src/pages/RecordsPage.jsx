@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Paper from '@mui/material/Paper'
@@ -32,6 +32,10 @@ import { isManualId, newManualId, todayLocal, watchChangeFromEntry } from '../re
 import { KIND_FILTERS, RATING_LABELS, filterRecordsByKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 import { addMonths, formatMinutes, summarizeMonth, summarizeYear, weekdayLabel } from '../records/summary.js'
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
+import { focusFirst } from '../focusFirst.js'
+
+// 見たいに戻した作品の行が消えた後のフォーカスの移し先の目印（各作品の ︙ ボタン）
+const menuButtonSelector = (movieId) => `[data-menu-id="${CSS.escape(movieId)}"]`
 
 function Stat({ label, value, unit }) {
   return (
@@ -150,6 +154,33 @@ export default function RecordsPage({ records }) {
   const [editTarget, setEditTarget] = useState(null)
   const [notice, setNotice] = useState(null)
   const [kindFilter, setKindFilter] = useState('all')
+  // 見たいに戻した作品の行が消えた後のフォーカスの移し先（次・前の作品の ︙ → 作品を追加）
+  const returnFocus = useRef([])
+  const addButton = useRef(null)
+  const undoButton = useRef(null)
+  const noticeRoot = useRef(null)
+  // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
+  const restoreOnExit = useRef(false)
+  const [focusRequest, setFocusRequest] = useState(null)
+
+  // 一覧の描き直しが終わってから移す（元に戻した作品の行は、記録の更新を描いた後にしか無い）
+  useEffect(() => {
+    if (!focusRequest) return
+    if (!focusFirst(focusRequest)) addButton.current?.focus()
+    setFocusRequest(null)
+  }, [focusRequest])
+
+  // 見たいに戻した直後は「元に戻す」へ移す（フォーカス中は Snackbar が自動で閉じない）
+  useEffect(() => {
+    if (!notice?.undo) return
+    const frame = requestAnimationFrame(() => undoButton.current?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [notice])
+
+  const closeNotice = () => {
+    restoreOnExit.current = Boolean(noticeRoot.current?.contains(document.activeElement))
+    setNotice(null)
+  }
 
   // entries は操作（編集・取り消し）用に全件、shown は種類で絞り込んだ集計・一覧用
   const entries = records.file?.records
@@ -171,6 +202,10 @@ export default function RecordsPage({ records }) {
   // ウォッチリスト由来の作品は「見たい」に戻し、手で追加した作品は記録を消す（どちらも元に戻せる）
   const unwatch = async (item) => {
     closeMenu()
+    const items = month.days.flatMap((day) => day.items)
+    const index = items.findIndex((other) => other.movie_id === item.movie_id)
+    const neighbors = index < 0 ? [] : [items[index + 1], items[index - 1]]
+    returnFocus.current = neighbors.map((other) => other && menuButtonSelector(other.movie_id))
     const entry = entries[item.movie_id]
     const manual = isManualId(item.movie_id)
     try {
@@ -193,10 +228,12 @@ export default function RecordsPage({ records }) {
   }
 
   const undo = async (change) => {
-    setNotice(null)
+    closeNotice()
     try {
       await records.save(change)
       setNotice({ severity: 'success', text: `「${change.title}」の記録を元に戻しました` })
+      // 一覧に戻ってきた作品の ︙ へ戻す
+      setFocusRequest([menuButtonSelector(change.movie_id), ...returnFocus.current])
     } catch (err) {
       // 失敗しても復元する内容を捨てない（捨てると元の視聴日・視聴時間を取り戻せなくなる）
       setNotice({ severity: 'error', text: `元に戻せませんでした。${recordsErrorMessage(err)}`, undo: change })
@@ -319,6 +356,7 @@ export default function RecordsPage({ records }) {
           </Typography>
           {canEdit && (
             <Button
+              ref={addButton}
               size="small"
               startIcon={<AddIcon />}
               onClick={() => setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })}
@@ -352,6 +390,7 @@ export default function RecordsPage({ records }) {
                         canEdit && (
                           <IconButton
                             edge="end"
+                            data-menu-id={item.movie_id}
                             aria-label={`「${item.title}」の操作`}
                             onClick={(event) => setMenu({ anchor: event.currentTarget, item, open: true })}
                           >
@@ -438,21 +477,32 @@ export default function RecordsPage({ records }) {
       )}
 
       <Snackbar
+        ref={noticeRoot}
         open={Boolean(notice)}
         autoHideDuration={notice?.severity === 'error' ? null : 8000}
         onClose={(_, reason) => {
-          if (reason !== 'clickaway') setNotice(null)
+          if (reason !== 'clickaway') closeNotice()
         }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        slotProps={{
+          transition: {
+            // 通知の中にあったフォーカスが閉じて行き場を失ったら、消えた作品の近くへ戻す
+            onExited: () => {
+              const lost = !document.activeElement || document.activeElement === document.body
+              if (restoreOnExit.current && lost) setFocusRequest(returnFocus.current)
+              restoreOnExit.current = false
+            },
+          },
+        }}
       >
         {notice ? (
           <Alert
             severity={notice.severity}
             variant="filled"
-            onClose={() => setNotice(null)}
+            onClose={closeNotice}
             action={
               notice.undo ? (
-                <Button color="inherit" size="small" onClick={() => undo(notice.undo)}>
+                <Button ref={undoButton} color="inherit" size="small" onClick={() => undo(notice.undo)}>
                   {notice.severity === 'error' ? '再試行' : '元に戻す'}
                 </Button>
               ) : undefined

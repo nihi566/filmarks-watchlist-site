@@ -38,6 +38,7 @@ import { MOVIE_ORDERS, sortMovies } from '../movieOrder.js'
 import { recordsErrorMessage } from '../records/github.js'
 import { describeFetchedAt } from '../fetchedAt.js'
 import { filmarksMovieUrl } from '../filmarks.js'
+import { focusFirst } from '../focusFirst.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 
 const UNAVAILABLE = '未配信'
@@ -82,18 +83,6 @@ function sortGroups(tabs, sortKey) {
 // 押した行が一覧から消えるとフォーカスが body（ページ先頭）へ落ちるので、近くの要素へ移すための目印
 const watchButtonSelector = (movieId) => `[data-watch-id="${CSS.escape(movieId)}"]`
 const groupSummarySelector = (name) => `[data-group-summary="${CSS.escape(name)}"]`
-
-// 候補を先頭から試し、画面にあって押せる最初の要素へフォーカスする
-function focusFirst(selectors) {
-  for (const selector of selectors) {
-    const element = selector ? document.querySelector(selector) : null
-    if (element && !element.disabled) {
-      element.focus()
-      return true
-    }
-  }
-  return false
-}
 
 function matchesKeyword(title, needle) {
   return title.toLowerCase().includes(needle)
