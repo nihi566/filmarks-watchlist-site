@@ -19,7 +19,7 @@ test.describe('見え方を URL で保つ', () => {
     await expect(page.getByRole('button', { name: 'Netflix', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'アニメ', exact: true })).toBeVisible()
     await expect(page.getByRole('searchbox')).toHaveValue('perfect')
-    await expect(page.getByRole('link', { name: /PERFECT BLUE/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toBeVisible()
     await page.getByRole('button', { name: '並び替え' }).click()
     await expect(page.getByRole('menuitem', { name: '最近クリップした順' })).toHaveClass(/Mui-selected/)
   })

@@ -29,6 +29,8 @@ import BlockIcon from '@mui/icons-material/Block'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import UpdateIcon from '@mui/icons-material/Update'
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline'
+import IconButton from '@mui/material/IconButton'
 import { visuallyHidden } from '@mui/utils'
 import { serviceIconUrl } from '../serviceIcons.js'
 import WatchDialog from '../components/WatchDialog.jsx'
@@ -141,13 +143,29 @@ function Thumbnail({ src }) {
   )
 }
 
-// 行本体は Filmarks へのリンク、右端の「見た」ボタンはリンクの外（secondaryAction）に置く
-function MovieRow({ movie, onWatch, canWatch }) {
+// 行本体は Filmarks へのリンク、右端の「観る」「見た」ボタンはリンクの外（secondaryAction）に置く。
+// 「観る」はそのサービスでこの作品を開くページ（scraper が Filmarks の配信一覧から取った URL がある作品だけ）
+function MovieRow({ movie, serviceName, onWatch, canWatch }) {
   return (
     <ListItem
       disablePadding
       secondaryAction={
-        <Button
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {movie.watch_url && (
+            <IconButton
+              component="a"
+              href={movie.watch_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              color="primary"
+              aria-label={`${serviceName}で「${movie.title}」を観る（新しいタブで開きます）`}
+              title={`${serviceName}で観る`}
+            >
+              <PlayCircleOutlineIcon />
+            </IconButton>
+          )}
+          <Button
           size="small"
           variant="outlined"
           startIcon={<CheckCircleOutlineIcon />}
@@ -159,6 +177,7 @@ function MovieRow({ movie, onWatch, canWatch }) {
         >
           見た
         </Button>
+        </Box>
       }
       sx={{ '& .MuiListItemSecondaryAction-root': { right: 12 } }}
     >
@@ -167,7 +186,7 @@ function MovieRow({ movie, onWatch, canWatch }) {
       href={filmarksMovieUrl(movie.movie_id)}
       target="_blank"
       rel="noopener"
-      sx={{ gap: 1.5, py: 0.5, pl: 2, pr: '92px !important' }}
+      sx={{ gap: 1.5, py: 0.5, pl: 2, pr: `${movie.watch_url ? 130 : 92}px !important` }}
     >
       <Thumbnail src={movie.image} />
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -230,6 +249,7 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
             <MovieRow
               key={movie.movie_id}
               movie={movie}
+              serviceName={group.name}
               onWatch={(target) => onWatch(target, group)}
               canWatch={canWatch}
             />
