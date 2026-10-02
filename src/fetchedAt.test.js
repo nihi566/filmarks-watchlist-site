@@ -9,6 +9,7 @@ describe('describeFetchedAt', () => {
     expect(describeFetchedAt('2026-09-26 21:48:14', now)).toEqual({
       date: '2026/09/26 21:48',
       ago: '3時間前',
+      stale: false,
     })
   })
 
@@ -21,6 +22,17 @@ describe('describeFetchedAt', () => {
 
   it('端末の時計が遅れていて未来の日時になっても「たった今」にする', () => {
     expect(describeFetchedAt('2026-09-27 01:05:00', now).ago).toBe('たった今')
+  })
+
+  it('取得から 3 日以上たっていたら古い（stale）とする', () => {
+    expect(describeFetchedAt('2026-09-26 21:48:14', now).stale).toBe(false)
+    expect(describeFetchedAt('2026-09-24 01:00:01', now).stale).toBe(false)
+    expect(describeFetchedAt('2026-09-24 01:00:00', now).stale).toBe(true)
+    expect(describeFetchedAt('2026-09-17 12:00:00', now).stale).toBe(true)
+  })
+
+  it('未来の日時は古いとしない', () => {
+    expect(describeFetchedAt('2026-09-27 01:05:00', now).stale).toBe(false)
   })
 
   it('日時として読めない値は null を返す', () => {
