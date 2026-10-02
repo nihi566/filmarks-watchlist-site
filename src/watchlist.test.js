@@ -22,6 +22,12 @@ describe('normalizeWatchlist', () => {
     expect(result.tabs[0].movies[0]).toMatchObject({ title: '1', image: '' })
   })
 
+  // 白画面対策（backlog 20260924-f-77e362）: サービス名が文字列以外で届いても描画できる形にする
+  it('サービス名を文字列にし、無ければ空文字にする', () => {
+    const result = normalizeWatchlist({ tabs: [{ name: 123, movies: [] }, { name: { a: 1 }, movies: [] }, { movies: [] }] })
+    expect(result.tabs.map((tab) => tab.name)).toEqual(['123', '[object Object]', ''])
+  })
+
   it('tabs が無ければ parse エラー', () => {
     expect(() => normalizeWatchlist({})).toThrow(expect.objectContaining({ kind: 'parse' }))
   })
