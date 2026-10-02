@@ -40,5 +40,9 @@ describe('describeFetchedAt', () => {
     expect(describeFetchedAt('', now)).toBeNull()
     expect(describeFetchedAt('昨日', now)).toBeNull()
     expect(describeFetchedAt('2026-13-40 99:99:99', now)).toBeNull()
+    // 文字列以外の形で届いても例外を投げず「日時不明」にする（backlog 20260924-f-77e362）
+    expect(describeFetchedAt(20260926, now)).toBeNull()
+    expect(describeFetchedAt({ date: '2026-09-26' }, now)).toBeNull()
+    expect(describeFetchedAt(['2026-09-26 21:48:14', 'x'], now)).toBeNull()
   })
 })
