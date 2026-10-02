@@ -50,6 +50,7 @@ const SORTS = [
 // 種類の絞り込みの選択肢。種類が分からない作品（movie-meta.json に無い作品）があれば「種類不明」も出す
 const KIND_MENU_LABELS = { all: 'すべての種類', movie: '映画（邦画・洋画）' }
 const KIND_MENU = KIND_FILTERS.map((item) => ({ ...item, label: KIND_MENU_LABELS[item.value] ?? item.label }))
+const UNKNOWN_KIND = { value: 'none', label: '種類不明' }
 
 function filterTabsByKind(tabs, kindFilter) {
   if (kindFilter === 'all') return tabs
@@ -332,12 +333,13 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   // 種類の絞り込みは件数・サービスの一覧を含むすべてに効かせる
   const visibleTabs = useMemo(() => filterTabsByKind(unwatchedTabs, kindFilter), [unwatchedTabs, kindFilter])
   const kindOptions = useMemo(() => {
-    const hasUnknown = unwatchedTabs.some((tab) => tab.movies.some((movie) => !isKind(movie.kind)))
-    return [...KIND_MENU, ...(hasUnknown ? [{ value: 'none', label: '種類不明' }] : [])].map((option) => ({
+    // 種類不明で絞り込んだまま最後の 1 件を「見た」にしても、選択中の項目としては残す
+    const hasUnknown = kindFilter === 'none' || unwatchedTabs.some((tab) => tab.movies.some((movie) => !isKind(movie.kind)))
+    return [...KIND_MENU, ...(hasUnknown ? [UNKNOWN_KIND] : [])].map((option) => ({
       ...option,
       count: countUniqueMovies(filterTabsByKind(unwatchedTabs, option.value)),
     }))
-  }, [unwatchedTabs])
+  }, [unwatchedTabs, kindFilter])
   const uniqueCount = useMemo(() => countUniqueMovies(visibleTabs), [visibleTabs])
   const allGroups = useMemo(() => sortGroups(visibleTabs, sortKey), [visibleTabs, sortKey])
 
