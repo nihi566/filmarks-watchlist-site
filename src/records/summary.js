@@ -3,6 +3,7 @@
 // 視聴時間が不明（null）の作品は合計時間に含めず、unknownCount として別に数える。
 // 種類で絞り込むときは、呼び出し側で filterRecordsByKind を通した records を渡す。
 import { KINDS, isKind } from './kinds.js'
+import { matchesKeyword, normalizeForSearch } from '../searchText.js'
 
 function entriesOf(records) {
   return Object.entries(records ?? {}).map(([movieId, entry]) => ({ movie_id: movieId, ...entry }))
@@ -34,6 +35,11 @@ function countByKind(items) {
   return groups.filter((group) => group.count > 0)
 }
 
+// 一覧の 1 行に出す項目
+function listItem({ movie_id, title, image, minutes, rating, kind, episodes }) {
+  return { movie_id, title, image, minutes, rating: rating ?? null, kind: kind ?? null, episodes: episodes ?? null }
+}
+
 export function summarizeMonth(records, year, month) {
   const prefix = prefixOf(year, month)
   const items = entriesOf(records).filter((item) => item.watched_on.startsWith(prefix))
@@ -45,19 +51,19 @@ export function summarizeMonth(records, year, month) {
     .sort(([a], [b]) => (a < b ? 1 : -1))
     .map(([date, dayItems]) => ({
       date,
-      items: dayItems
-        .map(({ movie_id, title, image, minutes, rating, kind, episodes }) => ({
-          movie_id,
-          title,
-          image,
-          minutes,
-          rating: rating ?? null,
-          kind: kind ?? null,
-          episodes: episodes ?? null,
-        }))
-        .sort((a, b) => a.title.localeCompare(b.title, 'ja')),
+      items: dayItems.map(listItem).sort((a, b) => a.title.localeCompare(b.title, 'ja')),
     }))
   return { ...totals(items), kinds: countByKind(items), days }
+}
+
+// 全期間からタイトルで探す（ひらがな/カタカナ・全角/半角を区別しない）。新しい視聴日順、同じ日は作品名順
+export function searchRecords(records, keyword) {
+  const needle = normalizeForSearch(String(keyword ?? '').trim())
+  if (!needle) return []
+  return entriesOf(records)
+    .filter((item) => matchesKeyword(item.title, needle))
+    .map((item) => ({ ...listItem(item), watched_on: item.watched_on }))
+    .sort((a, b) => (a.watched_on === b.watched_on ? a.title.localeCompare(b.title, 'ja') : a.watched_on < b.watched_on ? 1 : -1))
 }
 
 export function summarizeYear(records, year) {

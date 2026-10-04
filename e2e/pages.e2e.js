@@ -112,6 +112,45 @@ test.describe('視聴記録', () => {
     expect(errors).toEqual([])
   })
 
+  test('タイトルで全期間から探し、視聴日・★評価を見て、そこから記録を編集できる', async ({ page, github, errors }) => {
+    github.file.records = {
+      '9002': record('君の名は。', '2024-03-02', { kind: 'anime', minutes: 107, rating: 4, episodes: 1, episode_minutes: 107 }),
+      'manual-x': record('君の名は。（2回目）', monthStart(-2), { kind: 'anime', minutes: 107, rating: null, episodes: 1, episode_minutes: 107 }),
+      '564': record('20世紀少年', todayLocal(), { minutes: 142, rating: 3 }),
+    }
+    await page.goto('./#/records')
+    // ひらがな/カタカナ・全角/半角を区別しない
+    await page.getByRole('searchbox', { name: '視聴記録をタイトルで検索' }).fill('の名ハ')
+    const results = page.getByRole('region', { name: '検索結果' })
+    await expect(results.getByText('「の名ハ」に一致する記録 2件')).toBeVisible()
+    // 新しい視聴日順。視聴日と★評価が出る
+    await expect(results.getByRole('link')).toHaveText([/^君の名は。（2回目）/, /^君の名は。/])
+    await expect(results.getByText('2024年3月2日（土）')).toBeVisible()
+    await expect(results.getByRole('img', { name: '★4（面白かった）' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^20世紀少年/ })).toHaveCount(0)
+
+    await results.getByRole('button', { name: '「君の名は。」の操作' }).click()
+    await page.getByRole('menuitem', { name: '記録を編集' }).click()
+    const edit = page.getByRole('dialog', { name: '記録を編集' })
+    const radioId = await edit.getByRole('radio', { name: /5つ星/ }).getAttribute('id')
+    await edit.locator(`label[for="${radioId}"]`).click()
+    await edit.getByRole('button', { name: '保存' }).click()
+    await expect(page.getByText('「君の名は。」の記録を更新しました')).toBeVisible()
+    expect(github.file.records['9002']).toMatchObject({ rating: 5, watched_on: '2024-03-02' })
+    await expect(results.getByRole('img', { name: '★5（最高）' }).first()).toBeVisible()
+
+    // 検索結果から削除もでき、結果から消える
+    await results.getByRole('button', { name: '「君の名は。（2回目）」の操作' }).click()
+    await page.getByRole('menuitem', { name: '記録を削除' }).click()
+    await expect(page.getByText('「君の名は。（2回目）」の記録を削除しました')).toBeVisible()
+    await expect(results.getByText('「の名ハ」に一致する記録 1件')).toBeVisible()
+    expect(github.file.records['manual-x']).toBeUndefined()
+
+    await page.getByRole('searchbox', { name: '視聴記録をタイトルで検索' }).fill('存在しない')
+    await expect(page.getByText('「存在しない」に一致する記録はありません')).toBeVisible()
+    expect(errors).toEqual([])
+  })
+
   test('見たいに戻すと、ウォッチリストに戻っている', async ({ page, github }) => {
     github.file.records = { '13580': record('PERFECT BLUE', todayLocal(), { kind: 'anime', minutes: 81 }) }
     await page.goto('./#/records')
