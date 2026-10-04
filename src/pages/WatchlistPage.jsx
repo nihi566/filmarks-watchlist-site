@@ -47,6 +47,7 @@ import { matchesKeyword, normalizeForSearch } from '../searchText.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 import { readViewFromSearch, viewToSearch, withSearch } from '../watchlistUrl.js'
 import { RUNTIME_LIMITS, filterTabsByRuntime, runtimeLabel } from '../runtimeFilter.js'
+import { useElementHeight } from '../useElementHeight.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
@@ -358,6 +359,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   const returnFocus = useRef([])
   const undoButton = useRef(null)
   const noticeRoot = useRef(null)
+  const noticeHeight = useElementHeight(noticeRoot, Boolean(notice))
   // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
   const restoreOnExit = useRef(false)
   const [focusRequest, setFocusRequest] = useState(null)
@@ -519,6 +521,8 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
       prev && watchButtonSelector(prev.movie_id),
       groupSummarySelector(group.name),
     ]
+    // 前の通知が残っていると、ダイアログの保存ボタンの上に重なる
+    setNotice(null)
     setWatchTarget(movie)
   }
 
@@ -540,8 +544,8 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   }
 
   return (
-    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は下の余白を広げる
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? { xs: 17, sm: 12 } : 4 }}>
+    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は通知の高さの分だけ下の余白を広げる
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: noticeHeight > 0 ? `${noticeHeight + 32}px` : 4 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"

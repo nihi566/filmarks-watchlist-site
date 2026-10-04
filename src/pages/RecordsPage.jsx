@@ -47,6 +47,7 @@ import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
 import NoWrapParts from '../components/NoWrapParts.jsx'
+import { useElementHeight } from '../useElementHeight.js'
 
 // 見たいに戻した作品の行が消えた後のフォーカスの移し先の目印（各作品の ︙ ボタン）
 const menuButtonSelector = (movieId) => `[data-menu-id="${CSS.escape(movieId)}"]`
@@ -93,14 +94,16 @@ function MonthBars({ months, selectedMonth, lastSelectableMonth, onSelect }) {
             aria-pressed={selected}
             sx={{ flexDirection: 'column', justifyContent: 'flex-end', borderRadius: 1, py: 0.5, '&.Mui-disabled': { opacity: 0.4 } }}
           >
-            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              {count > 0 ? count : ''}
-            </Typography>
-            <Box sx={{ height: 64, width: '70%', display: 'flex', alignItems: 'flex-end' }}>
+            {/* 本数は棒のすぐ上に出す（棒の高さの枠の上に置くと、短い棒から離れて浮いて見える） */}
+            <Box sx={{ height: 82, width: '70%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                {count > 0 ? count : ''}
+              </Typography>
               <Box
                 sx={{
                   width: '100%',
-                  height: count > 0 ? `${Math.max(8, (count / max) * 100)}%` : 2,
+                  flexShrink: 0,
+                  height: count > 0 ? Math.max(5, Math.round((count / max) * 64)) : 2,
                   borderRadius: '4px 4px 0 0',
                   bgcolor: selected ? 'primary.main' : count > 0 ? 'primary.light' : 'grey.300',
                 }}
@@ -125,8 +128,16 @@ function YearRatings({ year }) {
         ★評価
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-        {counts.length > 0 ? counts.map((item) => `★${item.rating} ${item.count}本`).join('・') : 'まだ★評価を付けた作品はありません'}
-        {counts.length > 0 && year.unratedCount > 0 && `（未評価 ${year.unratedCount}本）`}
+        {counts.length > 0 ? (
+          <NoWrapParts parts={counts.map((item) => `★${item.rating} ${item.count}本`)} separator="・" />
+        ) : (
+          'まだ★評価を付けた作品はありません'
+        )}
+        {counts.length > 0 && year.unratedCount > 0 && (
+          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+            （未評価 {year.unratedCount}本）
+          </Box>
+        )}
       </Typography>
       {year.topRated.length > 0 && (
         <>
@@ -277,6 +288,7 @@ export default function RecordsPage({ records }) {
   const recordsRetry = useRetryFocus(records.status, () => addButton.current?.focus())
   const undoButton = useRef(null)
   const noticeRoot = useRef(null)
+  const noticeHeight = useElementHeight(noticeRoot, Boolean(notice))
   // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
   const restoreOnExit = useRef(false)
   const [focusRequest, setFocusRequest] = useState(null)
@@ -398,8 +410,8 @@ export default function RecordsPage({ records }) {
   const comparison = comparisonText(month.count, previousCount)
 
   return (
-    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は下の余白を広げる
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? { xs: 17, sm: 12 } : 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
+    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は通知の高さの分だけ下の余白を広げる
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: noticeHeight > 0 ? `${noticeHeight + 32}px` : 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"
@@ -570,7 +582,11 @@ export default function RecordsPage({ records }) {
                   ref={addButton}
                   size="small"
                   startIcon={<AddIcon />}
-                  onClick={() => setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })}
+                  onClick={() => {
+                    // 前の通知が残っていると、ダイアログの保存ボタンの上に重なる
+                    setNotice(null)
+                    setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })
+                  }}
                 >
                   作品を追加
                 </Button>
@@ -612,6 +628,7 @@ export default function RecordsPage({ records }) {
           onClick={() => {
             const { item } = menu
             closeMenu()
+            setNotice(null)
             setEditTarget({ movie: item, initial: entries[item.movie_id] })
           }}
         >

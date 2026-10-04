@@ -107,6 +107,8 @@ function LlmSettingsSection({ settings, onSave }) {
         <Autocomplete
           freeSolo
           options={models}
+          // 入力済みのモデル名で一覧が 1 件に絞られて他のモデルが見えなくならないよう、一覧はいつも全件を出す
+          filterOptions={(options) => options}
           inputValue={model}
           onInputChange={(_, value) => setModel(value)}
           renderInput={(params) => (

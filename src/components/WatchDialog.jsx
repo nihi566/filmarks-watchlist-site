@@ -127,8 +127,6 @@ export default function WatchDialog({
       onClose={close}
       fullWidth
       maxWidth="xs"
-      // 狭い画面では既定の左右 32px の余白を 16px にして、入力欄を広く取る
-      slotProps={{ paper: { sx: { mx: { xs: 2, sm: 4 }, width: { xs: 'calc(100% - 32px)', sm: 'calc(100% - 64px)' } } } }}
     >
       {/* form が Paper と DialogContent の間に入るので、縦に flex にしないと高さが足りないときに本文だけでなく保存ボタンまで画面外へ流れる */}
       <Box component="form" onSubmit={submit} noValidate sx={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -139,6 +137,9 @@ export default function WatchDialog({
               label="タイトル"
               size="small"
               required
+              // 長いタイトルも全体を確かめられるよう、3 行まで折り返して見せる
+              multiline
+              maxRows={3}
               value={titleText}
               onChange={(event) => setTitleText(event.target.value)}
               helperText="ウォッチリストに無い作品（テレビアニメなど）を記録できます"
@@ -223,7 +224,7 @@ export default function WatchDialog({
 
               {isAnime ? (
                 <Box>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 1.5 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 1.5 }}>
                     <TextField
                       label="見た話数"
                       type="number"
@@ -274,7 +275,8 @@ export default function WatchDialog({
             </Alert>
           )}
           {error && (
-            <Alert severity="error" role="alert">
+            // 入力欄の下の見えない位置に出ても気づけるよう、出たらそこまでスクロールする
+            <Alert severity="error" role="alert" ref={(node) => node?.scrollIntoView({ block: 'nearest' })}>
               {error}
             </Alert>
           )}
