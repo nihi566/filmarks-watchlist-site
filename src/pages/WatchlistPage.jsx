@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
@@ -48,6 +48,8 @@ import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/k
 import { readViewFromSearch, viewToSearch, withSearch } from '../watchlistUrl.js'
 import { RUNTIME_LIMITS, filterTabsByRuntime, runtimeLabel } from '../runtimeFilter.js'
 import { useElementHeight } from '../useElementHeight.js'
+import { rememberOpenGroup, rememberedOpenGroup } from '../scrollMemory.js'
+import { keepInPlace } from '../keepInPlace.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
@@ -91,6 +93,7 @@ function sortGroups(tabs, sortKey) {
 
 // 押した行が一覧から消えるとフォーカスが body（ページ先頭）へ落ちるので、近くの要素へ移すための目印
 const watchButtonSelector = (movieId) => `[data-watch-id="${CSS.escape(movieId)}"]`
+const RECORDS_WAIT_MS = 1500
 const groupSummarySelector = (name) => `[data-group-summary="${CSS.escape(name)}"]`
 
 function toggled(set, name) {
@@ -241,6 +244,18 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
   )
 }
 
+// 「WOWOWオンデマンド」のような英字と日本語のつながった名前は 1 語として扱われ、狭い画面で「オンデマン / ド」と割れるので、
+// 英数字と日本語の境目で改行できるようにする
+function BreakableName({ name }) {
+  const parts = name.split(/(?<=[A-Za-z0-9])(?=[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}])/u)
+  return parts.map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ))
+}
+
 function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch }) {
   return (
     <Accordion
@@ -249,16 +264,7 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
       elevation={0}
       expanded={expanded}
       onChange={onToggle}
-      slotProps={{
-        transition: {
-          unmountOnExit: true,
-          // 上で開いていた長いグループが閉じるとページが縮み、押した見出しが画面の上へ消えるので、見出しまで戻す
-          onEntered: (node) => {
-            const summary = node.closest('.MuiAccordion-root')?.querySelector('[data-group-summary]')
-            if (summary && summary.getBoundingClientRect().top < 0) summary.scrollIntoView({ block: 'start' })
-          },
-        },
-      }}
+      slotProps={{ transition: { unmountOnExit: true } }}
       sx={{
         bgcolor: 'background.paper',
         borderTop: isFirst ? 0 : 1,
@@ -272,7 +278,9 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
         sx={{ minHeight: 56, px: 2, '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1.5, my: 1 } }}
       >
         <ServiceIcon name={group.name} size={28} />
-        <Typography sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: 'anywhere' }}>{group.name}</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: 'anywhere' }}>
+          <BreakableName name={group.name} />
+        </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13, flexShrink: 0, whiteSpace: 'nowrap' }}>
           {group.movies.length}件
         </Typography>
@@ -342,7 +350,12 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   const [sortKey, setSortKey] = useState(initialView.sort)
   const [movieOrder, setMovieOrder] = useState(initialView.order)
   // 同時に開けるグループは 1 つだけ（別のグループを開くと前のグループは閉じる）
-  const [expandedName, setExpandedName] = useState(initialView.service)
+  // 戻る・進むで戻ってきたときは、離れる前に開いていたグループを開く
+  const [expandedName, setExpandedName] = useState(() => {
+    const remembered = rememberedOpenGroup()
+    return remembered !== undefined ? remembered : initialView.service
+  })
+  useEffect(() => rememberOpenGroup(expandedName), [expandedName])
   // 検索中は一致したグループを既定で開き、利用者が閉じたものだけを覚える
   const [collapsedInSearch, setCollapsedInSearch] = useState(new Set())
   const [serviceMenuAnchor, setServiceMenuAnchor] = useState(null)
@@ -359,6 +372,14 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   const returnFocus = useRef([])
   const undoButton = useRef(null)
   const noticeRoot = useRef(null)
+  // 視聴記録が後から届くと、見た作品が一覧から抜けてグループが並び替わり、画面が大きくずれる。
+  // 最初の読み込みが終わるまで（遅いときは少し待つだけで）一覧を出さない
+  const [recordsWaitOver, setRecordsWaitOver] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setRecordsWaitOver(true), RECORDS_WAIT_MS)
+    return () => clearTimeout(timer)
+  }, [])
+  const recordsSettled = records.status !== 'loading' || Boolean(records.file) || recordsWaitOver
   const noticeHeight = useElementHeight(noticeRoot, Boolean(notice))
   // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
   const restoreOnExit = useRef(false)
@@ -464,6 +485,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
 
   const isExpanded = (name) => (searching ? !collapsedInSearch.has(name) : expandedName === name)
   const toggleGroup = (name) => {
+    keepInPlace(document.querySelector(groupSummarySelector(name)))
     if (searching) setCollapsedInSearch((set) => toggled(set, name))
     else setExpandedName((current) => (current === name ? null : name))
   }
@@ -572,13 +594,13 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
         </Alert>
       )}
 
-      {!data && !error && (
+      {!(data && recordsSettled) && !error && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress aria-label="ウォッチリストを読み込み中" />
         </Box>
       )}
 
-      {data && (
+      {data && recordsSettled && (
         <>
           <FetchedAt value={data.generated_at} />
 

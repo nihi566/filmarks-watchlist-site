@@ -145,6 +145,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
   const running = run.status === 'running'
   const needsWatchlist = mode === 'watchlist'
   const watchlistReady = Boolean(watchlist.data)
+  const statsReady = records.status !== 'loading' || Boolean(records.file)
   const canRun = Boolean(llmSettings.model) && records.status !== 'loading' && (!needsWatchlist || watchlistReady) && !running
 
   const ask = async () => {
@@ -213,7 +214,9 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
 
       <Paper variant="outlined" component="section" aria-label="おすすめの条件" sx={{ borderRadius: 3, p: 2, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
         <Typography variant="body2">
-          見た作品 {stats.total} 本（★評価あり {stats.rated} 本・うち★4以上 {stats.liked} 本）をもとに、ローカル LLM が次に見る作品を選びます。
+          {/* 読み込み中に 0 本と出して、読み込み後に数字だけ変わって行がずれないよう、最初の読み込みが終わるまでは「…」にする */}
+          見た作品 {statsReady ? stats.total : '…'} 本（★評価あり {statsReady ? stats.rated : '…'} 本・うち★4以上 {statsReady ? stats.liked : '…'}{' '}
+          本）をもとに、ローカル LLM が次に見る作品を選びます。
         </Typography>
         {records.status === 'ready' && stats.rated === 0 && (
           <Typography variant="body2" color="text.secondary">

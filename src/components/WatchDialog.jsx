@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -120,6 +120,12 @@ export default function WatchDialog({
   }
 
   const shownRating = hoverRating > 0 ? hoverRating : rating
+
+  // 保存エラーは入力欄の下（見えない位置）に出ることがあるので、出たときに 1 回だけそこまでスクロールする
+  const errorRef = useRef(null)
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [error])
 
   return (
     <Dialog
@@ -275,8 +281,7 @@ export default function WatchDialog({
             </Alert>
           )}
           {error && (
-            // 入力欄の下の見えない位置に出ても気づけるよう、出たらそこまでスクロールする
-            <Alert severity="error" role="alert" ref={(node) => node?.scrollIntoView({ block: 'nearest' })}>
+            <Alert severity="error" role="alert" ref={errorRef}>
               {error}
             </Alert>
           )}

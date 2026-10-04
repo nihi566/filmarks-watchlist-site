@@ -48,6 +48,8 @@ import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
 import NoWrapParts from '../components/NoWrapParts.jsx'
 import { useElementHeight } from '../useElementHeight.js'
+import { keepInPlace } from '../keepInPlace.js'
+import { HEADER_HEIGHT } from '../navigation.js'
 
 // 見たいに戻した作品の行が消えた後のフォーカスの移し先の目印（各作品の ︙ ボタン）
 const menuButtonSelector = (movieId) => `[data-menu-id="${CSS.escape(movieId)}"]`
@@ -89,7 +91,10 @@ function MonthBars({ months, selectedMonth, lastSelectableMonth, onSelect }) {
           <ButtonBase
             key={month}
             disabled={month > lastSelectableMonth}
-            onClick={() => onSelect(month)}
+            onClick={(event) => {
+              keepInPlace(event.currentTarget)
+              onSelect(month)
+            }}
             aria-label={`${month}月 ${count}本`}
             aria-pressed={selected}
             sx={{ flexDirection: 'column', justifyContent: 'flex-end', borderRadius: 1, py: 0.5, '&.Mui-disabled': { opacity: 0.4 } }}
@@ -610,7 +615,7 @@ export default function RecordsPage({ records }) {
                 {month.days.map((day) => (
                   <li key={day.date}>
                     <List disablePadding>
-                      <ListSubheader sx={{ bgcolor: 'grey.50', fontWeight: 700, lineHeight: '36px' }}>{dayHeading(day.date)}</ListSubheader>
+                      <ListSubheader sx={{ bgcolor: 'grey.50', fontWeight: 700, lineHeight: '36px', top: HEADER_HEIGHT }}>{dayHeading(day.date)}</ListSubheader>
                       {day.items.map((item) => (
                         <RecordRow key={item.movie_id} item={item} canEdit={canEdit} onOpenMenu={openMenu} />
                       ))}

@@ -15,17 +15,21 @@ const theme = createTheme({
   components: {
     // 狭い画面で Alert の操作ボタン（「設定を開く」「再試行」）が「設定を開/く」と割れないようにする
     // 本文が細くなりすぎる狭い画面では、操作ボタンを本文の下の行へ回す
+    // （本文は少なくとも 12em を保ち、アイコンだけが 1 行に残らないよう、アイコンの横から外へは折り返さない）
+    // 本文は文節で折ると細い枠でぎざぎざになるので、Alert の中だけは通常の改行にする
     MuiAlert: {
       styleOverrides: {
-        root: { flexWrap: 'wrap' },
-        message: { flex: '1 1 12em', minWidth: 0 },
+        root: { '&:has(> .MuiAlert-action)': { flexWrap: 'wrap' } },
+        message: { flex: '1 1 0', minWidth: 'min(12em, calc(100% - 40px))', wordBreak: 'normal' },
         action: { '& .MuiButton-root': { whiteSpace: 'nowrap' } },
       },
     },
     // 狭い画面では既定の左右 32px の余白を 16px にして、ダイアログの中を広く取る
     MuiDialog: {
       styleOverrides: {
-        paper: ({ theme }) => ({ [theme.breakpoints.down('sm')]: { margin: 16, maxWidth: 'calc(100% - 32px)' } }),
+        // maxWidth="xs"（444px）の上限は残したまま、余白だけを詰める
+        paper: ({ theme }) => ({ [theme.breakpoints.down('sm')]: { margin: 16 } }),
+        paperWidthXs: ({ theme }) => ({ [theme.breakpoints.down('sm')]: { maxWidth: 'min(444px, calc(100% - 32px))' } }),
         paperFullWidth: ({ theme }) => ({ [theme.breakpoints.down('sm')]: { width: 'calc(100% - 32px)' } }),
       },
     },
@@ -39,7 +43,8 @@ const theme = createTheme({
     },
     // 区切りの無い長い英数字（URL や英題）が画面の横にはみ出さないよう、はみ出すときだけ途中で折り返す
     // 段落の最後の 1 文字だけが次の行に残る（「ありませ / ん」）のも避け、日本語は文節の切れ目で改行する（「一 / 致」「オンデマ / ンド」を避ける）
-    MuiCssBaseline: { styleOverrides: { body: { overflowWrap: 'break-word', textWrap: 'pretty', wordBreak: 'auto-phrase' } } },
+    // 固定の見出し（56px / 600px 以上は 64px）の下に、フォーカスやジャンプ先が隠れないようにする
+    MuiCssBaseline: { styleOverrides: { html: { scrollPaddingTop: 56, '@media (min-width: 600px)': { scrollPaddingTop: 64 } }, body: { overflowWrap: 'break-word', textWrap: 'pretty', wordBreak: 'auto-phrase' } } },
   },
 })
 

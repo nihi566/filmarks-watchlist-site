@@ -10,3 +10,6 @@ export const PAGES = [
   { id: 'recommend', hash: '#/recommend', label: 'おすすめ', Icon: AutoAwesomeIcon },
   { id: 'settings', hash: '#/settings', label: '設定', Icon: SettingsIcon },
 ]
+
+// 画面上に固定する見出し（AppBar）の高さ。固定の見出しやスクロール位置をこの分だけ下げる
+export const HEADER_HEIGHT = { xs: 56, sm: 64 }
