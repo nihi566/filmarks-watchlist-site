@@ -6,6 +6,7 @@ import {
   emptyRecordsFile,
   encodeBase64Utf8,
   excludeWatched,
+  initialEpisodeFields,
   isManualId,
   newManualId,
   parseRecordsFile,
@@ -203,6 +204,45 @@ describe('animeMinutes', () => {
     expect(animeMinutes(1, 107)).toBe(107)
     expect(animeMinutes(null, 24)).toBeNull()
     expect(animeMinutes(12, null)).toBeNull()
+  })
+})
+
+describe('initialEpisodeFields', () => {
+  it('新規の記録: 上映時間が分かれば 1 話ぶん、分からなければ 12 話・24 分', () => {
+    expect(initialEpisodeFields(null, 107)).toEqual({ episodes: 1, episode_minutes: 107 })
+    expect(initialEpisodeFields(undefined, null)).toEqual({ episodes: 12, episode_minutes: 24 })
+  })
+
+  it('アニメの記録の編集: 空欄（null）は既定値で埋めず空欄のまま', () => {
+    const anime = { kind: 'anime', minutes: null }
+    expect(initialEpisodeFields({ ...anime, episodes: null, episode_minutes: 24 }, null)).toEqual({
+      episodes: null,
+      episode_minutes: 24,
+    })
+    expect(initialEpisodeFields({ ...anime, episodes: 12, episode_minutes: null }, null)).toEqual({
+      episodes: 12,
+      episode_minutes: null,
+    })
+    expect(initialEpisodeFields({ ...anime, episodes: null, episode_minutes: null }, null)).toEqual({
+      episodes: null,
+      episode_minutes: null,
+    })
+    expect(initialEpisodeFields({ kind: 'anime', minutes: 288, episodes: 12, episode_minutes: 24 }, 288)).toEqual({
+      episodes: 12,
+      episode_minutes: 24,
+    })
+  })
+
+  it('アニメ以外の記録の編集: アニメへ切り替えたときは記録した時間を 1 話ぶんとして使う', () => {
+    const movie = { episodes: null, episode_minutes: null }
+    expect(initialEpisodeFields({ ...movie, kind: 'japanese', minutes: 120 }, 120)).toEqual({
+      episodes: 1,
+      episode_minutes: 120,
+    })
+    expect(initialEpisodeFields({ ...movie, kind: 'western', minutes: null }, null)).toEqual({
+      episodes: 12,
+      episode_minutes: 24,
+    })
   })
 })
 

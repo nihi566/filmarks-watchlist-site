@@ -44,6 +44,16 @@ export function animeMinutes(episodes, episodeMinutes) {
   return episodes != null && episodeMinutes != null ? episodes * episodeMinutes : null
 }
 
+// 記録ダイアログの「見た話数」「1 話の長さ」の初期値。
+// アニメの記録の編集は記録の値をそのまま使う（空欄 = 不明を既定値で埋めると、気づかないまま視聴時間が書き換わる）。
+// 新規やアニメ以外の記録は、上映時間（記録した時間）が分かれば 1 話ぶん、分からなければ 1 クール（12 話・24 分）
+export function initialEpisodeFields(initial, baseMinutes) {
+  if (initial?.kind === 'anime') {
+    return { episodes: initial.episodes ?? null, episode_minutes: initial.episode_minutes ?? null }
+  }
+  return baseMinutes != null ? { episodes: 1, episode_minutes: baseMinutes } : { episodes: 12, episode_minutes: 24 }
+}
+
 export function isManualId(movieId) {
   return String(movieId).startsWith(MANUAL_ID_PREFIX)
 }
