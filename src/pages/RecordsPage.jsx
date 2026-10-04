@@ -25,13 +25,16 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import Rating from '@mui/material/Rating'
+import TextField from '@mui/material/TextField'
+import InputAdornment from '@mui/material/InputAdornment'
+import SearchIcon from '@mui/icons-material/Search'
 import { visuallyHidden } from '@mui/utils'
 import WatchDialog from '../components/WatchDialog.jsx'
 import FilterButton from '../components/FilterButton.jsx'
 import { recordsErrorMessage } from '../records/github.js'
 import { isManualId, newManualId, todayLocal, watchChangeFromEntry } from '../records/records.js'
 import { KIND_FILTERS, RATING_LABELS, filterRecordsByKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
-import { addMonths, formatMinutes, summarizeMonth, summarizeYear, weekdayLabel } from '../records/summary.js'
+import { addMonths, formatMinutes, searchRecords, summarizeMonth, summarizeYear, weekdayLabel } from '../records/summary.js'
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
@@ -127,6 +130,69 @@ function itemUrl(item) {
   return isManualId(item.movie_id) ? filmarksSearchUrl(item.title, item.kind) : filmarksMovieUrl(item.movie_id)
 }
 
+// 検索結果は月をまたぐので、年から出す
+function fullDateLabel(date) {
+  const [y] = date.split('-')
+  return `${y}年${dayHeading(date)}`
+}
+
+// 一覧の 1 行。行本体は Filmarks へのリンク、右端の ︙（記録を編集・見たいに戻す）は書き込めるときだけ出す。
+// dateText を渡すと、作品名の下に視聴日も出す（検索結果用）
+function RecordRow({ item, canEdit, onOpenMenu, dateText }) {
+  return (
+    <ListItem
+      disablePadding
+      secondaryAction={
+        canEdit && (
+          <IconButton
+            edge="end"
+            data-menu-id={item.movie_id}
+            aria-label={`「${item.title}」の操作`}
+            onClick={(event) => onOpenMenu(event.currentTarget, item)}
+          >
+            <MoreVertIcon />
+          </IconButton>
+        )
+      }
+    >
+      {/* 記録した作品の Filmarks ページ（レビューや Mark を付けに行く導線） */}
+      <ListItemButton component="a" href={itemUrl(item)} target="_blank" rel="noopener" sx={{ pr: canEdit ? 7 : 2 }}>
+        <ListItemAvatar sx={{ minWidth: 44 }}>
+          <Avatar
+            variant="rounded"
+            src={item.image || undefined}
+            alt=""
+            sx={{ width: 30, height: 40, bgcolor: 'grey.200', color: 'grey.500' }}
+          >
+            <MovieIcon fontSize="small" />
+          </Avatar>
+        </ListItemAvatar>
+        <ListItemText
+          primary={item.title}
+          secondary={
+            <>
+              {dateText && (
+                <Box component="span" sx={{ display: 'block' }}>
+                  {dateText}
+                </Box>
+              )}
+              <ItemRating value={item.rating} />
+              <Box component="span" sx={{ display: 'block' }}>
+                {itemDetail(item)}
+              </Box>
+            </>
+          }
+          slotProps={{ primary: { variant: 'body2' } }}
+        />
+        <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, ml: 1 }} />
+        <Box component="span" sx={visuallyHidden}>
+          （新しいタブで開きます）
+        </Box>
+      </ListItemButton>
+    </ListItem>
+  )
+}
+
 function ItemRating({ value }) {
   if (!value) {
     return (
@@ -156,9 +222,12 @@ export default function RecordsPage({ records }) {
   const [editTarget, setEditTarget] = useState(null)
   const [notice, setNotice] = useState(null)
   const [kindFilter, setKindFilter] = useState('all')
+  // タイトル検索（全期間）。入力中は月の表示の代わりに検索結果を出す
+  const [searchText, setSearchText] = useState('')
   // 見たいに戻した作品の行が消えた後のフォーカスの移し先（次・前の作品の ︙ → 作品を追加）
   const returnFocus = useRef([])
   const addButton = useRef(null)
+  const searchInput = useRef(null)
   // 再試行で消えた Alert の代わりに、成功したら「追加」へ、また失敗したら新しい「再試行」へ戻す
   const recordsRetry = useRetryFocus(records.status, () => addButton.current?.focus())
   const undoButton = useRef(null)
@@ -170,7 +239,8 @@ export default function RecordsPage({ records }) {
   // 一覧の描き直しが終わってから移す（元に戻した作品の行は、記録の更新を描いた後にしか無い）
   useEffect(() => {
     if (!focusRequest) return
-    if (!focusFirst(focusRequest)) addButton.current?.focus()
+    // 検索中は「作品を追加」が無いので検索欄へ
+    if (!focusFirst(focusRequest)) (addButton.current ?? searchInput.current)?.focus()
     setFocusRequest(null)
   }, [focusRequest])
 
@@ -197,16 +267,20 @@ export default function RecordsPage({ records }) {
     [shown, previous.year, previous.month],
   )
   const year = useMemo(() => summarizeYear(shown, period.year), [shown, period.year])
+  const keyword = searchText.trim()
+  const searching = keyword !== ''
+  const results = useMemo(() => searchRecords(shown, keyword), [shown, keyword])
   const isThisMonth = period.year === thisYear && period.month === thisMonth
   // 記録を読み終えるまで編集・見たいに戻すを出さない（古い内容で上書きしないため）
   const canEdit = records.canWrite && records.status === 'ready'
 
   const move = (delta) => setPeriod((current) => addMonths(current.year, current.month, delta))
+  const openMenu = (anchor, item) => setMenu({ anchor, item, open: true })
 
   // ウォッチリスト由来の作品は「見たい」に戻し、手で追加した作品は記録を消す（どちらも元に戻せる）
   const unwatch = async (item) => {
     closeMenu()
-    const items = month.days.flatMap((day) => day.items)
+    const items = searching ? results : month.days.flatMap((day) => day.items)
     const index = items.findIndex((other) => other.movie_id === item.movie_id)
     const neighbors = index < 0 ? [] : [items[index + 1], items[index - 1]]
     returnFocus.current = neighbors.map((other) => other && menuButtonSelector(other.movie_id))
@@ -311,152 +385,156 @@ export default function RecordsPage({ records }) {
         ))}
       </Box>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-        <IconButton aria-label="前の月" onClick={() => move(-1)}>
-          <ChevronLeftIcon />
-        </IconButton>
-        <Typography component="h2" aria-live="polite" sx={{ fontWeight: 800, fontSize: 18, minWidth: 120, textAlign: 'center' }}>
-          {period.year}年{period.month}月
-        </Typography>
-        <IconButton aria-label="次の月" onClick={() => move(1)} disabled={isThisMonth}>
-          <ChevronRightIcon />
-        </IconButton>
-      </Box>
+      <TextField
+        type="search"
+        size="small"
+        placeholder="タイトルで検索（全期間）"
+        value={searchText}
+        onChange={(event) => setSearchText(event.target.value)}
+        inputRef={searchInput}
+        slotProps={{
+          htmlInput: { 'aria-label': '視聴記録をタイトルで検索' },
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          },
+        }}
+        sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
+      />
 
-      <Paper variant="outlined" component="section" aria-label={`${period.year}年${period.month}月のまとめ`} sx={{ borderRadius: 3, p: 2 }}>
-        <Typography sx={{ fontWeight: 700, mb: 1 }}>
-          {period.year}年{period.month}月のまとめ
-        </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-          <Stat label="見た作品" value={month.count} unit="本" />
-          <Stat label="視聴時間" value={formatMinutes(month.minutes)} />
-        </Box>
-        {comparison && (
-          <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: month.count >= previousCount ? 'success.main' : 'text.secondary' }}>
-            {comparison}
-          </Typography>
-        )}
-        {month.kinds.length > 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {kindsText(month.kinds)}
-          </Typography>
-        )}
-        {month.unknownCount > 0 && (
-          <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
-            視聴時間が分からない {month.unknownCount} 本は時間に含めていません
-          </Typography>
-        )}
-      </Paper>
-
-      <Paper variant="outlined" component="section" aria-label={`${period.year}年のまとめ`} sx={{ borderRadius: 3, p: 2 }}>
-        <Typography sx={{ fontWeight: 700, mb: 1 }}>{period.year}年のまとめ</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-          <Stat label="見た作品" value={year.count} unit="本" />
-          <Stat label="視聴時間" value={formatMinutes(year.minutes)} />
-        </Box>
-        {year.kinds.length > 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            {kindsText(year.kinds)}
-          </Typography>
-        )}
-        <MonthBars
-          months={year.months}
-          selectedMonth={period.month}
-          lastSelectableMonth={period.year === thisYear ? thisMonth : 12}
-          onSelect={(selected) => setPeriod({ year: period.year, month: selected })}
-        />
-      </Paper>
-
-      <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'hidden' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
-          <Typography component="h2" sx={{ fontWeight: 700, flexGrow: 1 }}>
-            見た作品
-          </Typography>
-          {canEdit && (
-            <Button
-              ref={addButton}
-              size="small"
-              startIcon={<AddIcon />}
-              onClick={() => setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })}
-            >
-              作品を追加
-            </Button>
-          )}
-        </Box>
-        {month.days.length === 0 ? (
-          <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
-            <Typography color="text.secondary" sx={{ mb: 1.5 }}>
-              {kindFilter !== 'all'
-                ? 'この月に、この種類の視聴記録はありません。'
-                : records.canWrite
-                  ? 'この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は「作品を追加」から記録できます。'
-                  : 'この月の視聴記録はまだありません。'}
+      {searching ? (
+        <Paper variant="outlined" component="section" aria-label="検索結果" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+            <Typography component="h2" aria-live="polite" sx={{ fontWeight: 700 }}>
+              {results.length > 0 ? `「${keyword}」に一致する記録 ${results.length}件` : `「${keyword}」に一致する記録はありません`}
             </Typography>
-            <Button variant="outlined" href="#/">
-              ウォッチリストへ
-            </Button>
+            {kindFilter !== 'all' && (
+              <Typography variant="caption" color="text.secondary">
+                種類の絞り込み（{KIND_FILTERS.find((filter) => filter.value === kindFilter)?.label ?? '未分類'}）の中から探しています
+              </Typography>
+            )}
           </Box>
-        ) : (
-          <List disablePadding>
-            {month.days.map((day) => (
-              <li key={day.date}>
-                <List disablePadding>
-                  <ListSubheader sx={{ bgcolor: 'grey.50', fontWeight: 700, lineHeight: '36px' }}>{dayHeading(day.date)}</ListSubheader>
-                  {day.items.map((item) => (
-                    <ListItem
-                      key={item.movie_id}
-                      disablePadding
-                      secondaryAction={
-                        canEdit && (
-                          <IconButton
-                            edge="end"
-                            data-menu-id={item.movie_id}
-                            aria-label={`「${item.title}」の操作`}
-                            onClick={(event) => setMenu({ anchor: event.currentTarget, item, open: true })}
-                          >
-                            <MoreVertIcon />
-                          </IconButton>
-                        )
-                      }
-                    >
-                      {/* 記録した作品の Filmarks ページ（レビューや Mark を付けに行く導線） */}
-                      <ListItemButton
-                        component="a"
-                        href={itemUrl(item)}
-                        target="_blank"
-                        rel="noopener"
-                        sx={{ pr: canEdit ? 7 : 2 }}
-                      >
-                      <ListItemAvatar sx={{ minWidth: 44 }}>
-                        <Avatar variant="rounded" src={item.image || undefined} alt="" sx={{ width: 30, height: 40, bgcolor: 'grey.200', color: 'grey.500' }}>
-                          <MovieIcon fontSize="small" />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={item.title}
-                        secondary={
-                          <>
-                            <ItemRating value={item.rating} />
-                            <Box component="span" sx={{ display: 'block' }}>
-                              {itemDetail(item)}
-                            </Box>
-                          </>
-                        }
-                        slotProps={{ primary: { variant: 'body2' } }}
-                      />
-                      <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, ml: 1 }} />
-                      <Box component="span" sx={visuallyHidden}>
-                        （新しいタブで開きます）
-                      </Box>
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </li>
-            ))}
-          </List>
-        )}
-      </Paper>
+          {results.length > 0 && (
+            <List disablePadding>
+              {results.map((item) => (
+                <RecordRow
+                  key={item.movie_id}
+                  item={item}
+                  canEdit={canEdit}
+                  onOpenMenu={openMenu}
+                  dateText={fullDateLabel(item.watched_on)}
+                />
+              ))}
+            </List>
+          )}
+        </Paper>
+      ) : (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+            <IconButton aria-label="前の月" onClick={() => move(-1)}>
+              <ChevronLeftIcon />
+            </IconButton>
+            <Typography component="h2" aria-live="polite" sx={{ fontWeight: 800, fontSize: 18, minWidth: 120, textAlign: 'center' }}>
+              {period.year}年{period.month}月
+            </Typography>
+            <IconButton aria-label="次の月" onClick={() => move(1)} disabled={isThisMonth}>
+              <ChevronRightIcon />
+            </IconButton>
+          </Box>
+
+          <Paper variant="outlined" component="section" aria-label={`${period.year}年${period.month}月のまとめ`} sx={{ borderRadius: 3, p: 2 }}>
+            <Typography sx={{ fontWeight: 700, mb: 1 }}>
+              {period.year}年{period.month}月のまとめ
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              <Stat label="見た作品" value={month.count} unit="本" />
+              <Stat label="視聴時間" value={formatMinutes(month.minutes)} />
+            </Box>
+            {comparison && (
+              <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: month.count >= previousCount ? 'success.main' : 'text.secondary' }}>
+                {comparison}
+              </Typography>
+            )}
+            {month.kinds.length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {kindsText(month.kinds)}
+              </Typography>
+            )}
+            {month.unknownCount > 0 && (
+              <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
+                視聴時間が分からない {month.unknownCount} 本は時間に含めていません
+              </Typography>
+            )}
+          </Paper>
+
+          <Paper variant="outlined" component="section" aria-label={`${period.year}年のまとめ`} sx={{ borderRadius: 3, p: 2 }}>
+            <Typography sx={{ fontWeight: 700, mb: 1 }}>{period.year}年のまとめ</Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              <Stat label="見た作品" value={year.count} unit="本" />
+              <Stat label="視聴時間" value={formatMinutes(year.minutes)} />
+            </Box>
+            {year.kinds.length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {kindsText(year.kinds)}
+              </Typography>
+            )}
+            <MonthBars
+              months={year.months}
+              selectedMonth={period.month}
+              lastSelectableMonth={period.year === thisYear ? thisMonth : 12}
+              onSelect={(selected) => setPeriod({ year: period.year, month: selected })}
+            />
+          </Paper>
+
+          <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography component="h2" sx={{ fontWeight: 700, flexGrow: 1 }}>
+                見た作品
+              </Typography>
+              {canEdit && (
+                <Button
+                  ref={addButton}
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })}
+                >
+                  作品を追加
+                </Button>
+              )}
+            </Box>
+            {month.days.length === 0 ? (
+              <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
+                <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+                  {kindFilter !== 'all'
+                    ? 'この月に、この種類の視聴記録はありません。'
+                    : records.canWrite
+                      ? 'この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は「作品を追加」から記録できます。'
+                      : 'この月の視聴記録はまだありません。'}
+                </Typography>
+                <Button variant="outlined" href="#/">
+                  ウォッチリストへ
+                </Button>
+              </Box>
+            ) : (
+              <List disablePadding>
+                {month.days.map((day) => (
+                  <li key={day.date}>
+                    <List disablePadding>
+                      <ListSubheader sx={{ bgcolor: 'grey.50', fontWeight: 700, lineHeight: '36px' }}>{dayHeading(day.date)}</ListSubheader>
+                      {day.items.map((item) => (
+                        <RecordRow key={item.movie_id} item={item} canEdit={canEdit} onOpenMenu={openMenu} />
+                      ))}
+                    </List>
+                  </li>
+                ))}
+              </List>
+            )}
+          </Paper>
+        </>
+      )}
 
       <Menu anchorEl={menu?.anchor} open={Boolean(menu?.open)} onClose={closeMenu}>
         <MenuItem

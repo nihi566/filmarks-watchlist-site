@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, formatMinutes, summarizeMonth, summarizeYear, weekdayLabel } from './summary.js'
+import { addMonths, formatMinutes, searchRecords, summarizeMonth, summarizeYear, weekdayLabel } from './summary.js'
 
 const records = {
   1: { title: 'B作品', image: '', watched_on: '2026-09-26', minutes: 150, updated_at: '' },
@@ -107,5 +107,31 @@ describe('weekdayLabel', () => {
   it('日付文字列から曜日を返す（UTC で解釈してずれない）', () => {
     expect(weekdayLabel('2026-09-26')).toBe('土')
     expect(weekdayLabel('2026-01-01')).toBe('木')
+  })
+})
+
+describe('searchRecords', () => {
+  const library = {
+    10: { title: '君の名は。', image: '', watched_on: '2024-03-02', minutes: 107, rating: 5, kind: 'anime', episodes: 1 },
+    11: { title: '君の名は。（2回目）', image: '', watched_on: '2026-01-15', minutes: 107, rating: null, kind: 'anime' },
+    12: { title: 'ｲﾝﾀｰｽﾃﾗｰ', image: '', watched_on: '2025-07-01', minutes: 169, rating: 4, kind: 'western' },
+    13: { title: 'Ａｍｅｌｉｅ', image: '', watched_on: '2023-11-11', minutes: 122, kind: 'western' },
+  }
+
+  it('全期間からタイトルに一致する記録を、新しい視聴日順で返す（視聴日・★評価付き）', () => {
+    const result = searchRecords(library, 'の名ハ')
+    expect(result.map((item) => item.movie_id)).toEqual(['11', '10'])
+    expect(result[1]).toMatchObject({ title: '君の名は。', watched_on: '2024-03-02', rating: 5, kind: 'anime', episodes: 1 })
+    expect(result[0]).toMatchObject({ rating: null, episodes: null })
+  })
+
+  it('ひらがな/カタカナ・全角/半角・大文字/小文字を区別しない', () => {
+    expect(searchRecords(library, 'いんたー').map((item) => item.movie_id)).toEqual(['12'])
+    expect(searchRecords(library, 'amelie').map((item) => item.movie_id)).toEqual(['13'])
+  })
+
+  it('検索語が空白だけ・記録が無いときは空', () => {
+    expect(searchRecords(library, '  ')).toEqual([])
+    expect(searchRecords(null, 'きみ')).toEqual([])
   })
 })
