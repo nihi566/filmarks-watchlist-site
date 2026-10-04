@@ -75,7 +75,7 @@ function RecommendationCard({ item, rank }) {
         <MovieIcon />
       </Avatar>
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-        <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+        <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, lineHeight: 1.4, overflowWrap: 'anywhere', wordBreak: 'normal' }}>
           <Box component="span" sx={visuallyHidden}>
             {rank}位:{' '}
           </Box>

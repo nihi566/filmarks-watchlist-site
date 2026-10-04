@@ -20,7 +20,7 @@ const theme = createTheme({
     MuiAlert: {
       styleOverrides: {
         root: { '&:has(> .MuiAlert-action)': { flexWrap: 'wrap' } },
-        message: { flex: '1 1 0', minWidth: 'min(12em, calc(100% - 40px))', wordBreak: 'normal' },
+        message: { flex: '1 1 0', minWidth: 'min(12em, calc(100% - 40px))', wordBreak: 'normal', textWrap: 'balance' },
         action: { '& .MuiButton-root': { whiteSpace: 'nowrap' } },
       },
     },
@@ -41,6 +41,9 @@ const theme = createTheme({
         }),
       },
     },
+    // スマホなど指で操作する端末では、小さいボタンも押せる範囲を 40px 以上にする
+    MuiButton: { styleOverrides: { root: { '@media (pointer: coarse)': { minHeight: 40 } } } },
+    MuiIconButton: { styleOverrides: { sizeSmall: { '@media (pointer: coarse)': { minWidth: 40, minHeight: 40 } } } },
     // 区切りの無い長い英数字（URL や英題）が画面の横にはみ出さないよう、はみ出すときだけ途中で折り返す
     // 段落の最後の 1 文字だけが次の行に残る（「ありませ / ん」）のも避け、日本語は文節の切れ目で改行する（「一 / 致」「オンデマ / ンド」を避ける）
     // 固定の見出し（56px / 600px 以上は 64px）の下に、キーボードで移ったフォーカスが隠れないようにする。

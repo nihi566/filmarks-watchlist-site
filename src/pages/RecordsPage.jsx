@@ -153,7 +153,7 @@ function YearRatings({ year }) {
             {year.topRated.map((item) => (
               <ListItem key={item.movie_id} disableGutters sx={{ py: 0.25, gap: 1 }}>
                 <ItemRating value={item.rating} />
-                <ListItemText primary={item.title} slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere' } } }} sx={{ my: 0 }} />
+                <ListItemText primary={item.title} slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere', wordBreak: 'normal' } } }} sx={{ my: 0 }} />
               </ListItem>
             ))}
           </List>
@@ -244,7 +244,7 @@ function RecordRow({ item, canEdit, onOpenMenu, dateText }) {
               </Box>
             </>
           }
-          slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere' } } }}
+          slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere', wordBreak: 'normal' } } }}
         />
         <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, ml: 1 }} />
         <Box component="span" sx={visuallyHidden}>
@@ -605,7 +605,15 @@ export default function RecordsPage({ records }) {
                   {kindFilter !== 'all'
                     ? 'この月に、この種類の視聴記録はありません。'
                     : records.canWrite
-                      ? 'この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は「作品を追加」から記録できます。'
+                      ? (
+                        <>
+                          この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は
+                          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+                            「作品を追加」
+                          </Box>
+                          から記録できます。
+                        </>
+                      )
                       : 'この月の視聴記録はまだありません。'}
                 </Typography>
                 <Button variant="outlined" href="#/">

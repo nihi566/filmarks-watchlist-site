@@ -182,6 +182,7 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               overflowWrap: 'anywhere',
+              wordBreak: 'normal',
             }}
           >
             {movie.title}
@@ -281,11 +282,15 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
         sx={{ minHeight: 56, px: 2, '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1.5, my: 1 } }}
       >
         <ServiceIcon name={group.name} size={28} />
+        {/* 件数は名前と同じ行の中に続けて置く（名前が 2 行になっても、件数が右端へ離れない） */}
         <Typography sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: 'anywhere' }}>
           <BreakableName name={group.name} />
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13, flexShrink: 0, whiteSpace: 'nowrap' }}>
-          {group.movies.length}件
+          <Box
+            component="span"
+            sx={{ ml: 1.5, fontSize: 13, fontWeight: 400, color: 'text.secondary', whiteSpace: 'nowrap', display: 'inline-block' }}
+          >
+            {group.movies.length}件
+          </Box>
         </Typography>
       </AccordionSummary>
       <AccordionDetails sx={{ p: 0, pb: 1 }}>
