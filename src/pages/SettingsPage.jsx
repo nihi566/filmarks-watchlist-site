@@ -209,7 +209,8 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
         text: `接続できました（視聴記録 ${Object.keys(file.records).length}件）。書き込みの権限は最初に記録を保存したときに確認されます。`,
       })
     } catch (err) {
-      setResult({ severity: 'error', text: recordsErrorMessage(err) })
+      // この画面の中なので「設定画面で」の案内は省く
+      setResult({ severity: 'error', text: recordsErrorMessage(err).replace('設定画面で', '') })
     } finally {
       setChecking(false)
     }

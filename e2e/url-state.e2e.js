@@ -95,8 +95,8 @@ test.describe('戻る・進む', () => {
     const hulu = page.getByRole('button', { name: /^Hulu\s*\d+件/ })
     await hulu.click()
     await expect(hulu).toHaveAttribute('aria-expanded', 'true')
-    await page.evaluate(() => window.scrollTo(0, 150))
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(150)
+    await page.evaluate(() => window.scrollTo(0, 100))
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(100)
 
     // Playwright の click() は固定の見出しの中のボタンでも、押す前にページを先頭までスクロールしてしまうので、DOM の click で押す
     await page.getByRole('button', { name: 'メニューを開く' }).evaluate((button) => button.click())
@@ -106,6 +106,6 @@ test.describe('戻る・進む', () => {
 
     await page.goBack()
     await expect(hulu).toHaveAttribute('aria-expanded', 'true')
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(150)
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(100)
   })
 })

@@ -212,6 +212,8 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
             rel="noopener noreferrer"
             size="small"
             color="primary"
+            // スマホでも押しやすいよう、xs では押せる範囲を 40px にする
+            sx={{ p: { xs: 1, sm: 0.625 } }}
             aria-label={`${serviceName}で「${movie.title}」を観る（新しいタブで開きます）`}
             title={`${serviceName}で観る`}
           >
@@ -232,6 +234,7 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
             borderRadius: 999,
             minWidth: 0,
             px: 1.25,
+            minHeight: { xs: 40, sm: 'auto' },
             whiteSpace: 'nowrap',
             // 狭い画面ではチェックの印を省いて幅を詰める
             '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
@@ -625,7 +628,22 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
             sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
           />
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5, mb: 1.5 }}>
+          {/* 狭い画面で絞り込みボタンが 3〜4 行を占めて一覧が下へ押し出されないよう、xs では 1 行にして横にスクロールさせる */}
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: { xs: 'nowrap', sm: 'wrap' },
+              overflowX: { xs: 'auto', sm: 'visible' },
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+              mx: { xs: -2, sm: 0 },
+              px: { xs: 2, sm: 0 },
+              '& > .MuiButton-root': { flexShrink: 0 },
+              gap: 1,
+              mt: 1.5,
+              mb: 1.5,
+            }}
+          >
             <FilterButton selected={!serviceFilter} aria-pressed={!serviceFilter} onClick={() => selectService(null)}>
               すべて {uniqueCount}
             </FilterButton>

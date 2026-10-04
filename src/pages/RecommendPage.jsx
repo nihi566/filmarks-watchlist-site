@@ -28,6 +28,21 @@ import { chatJson, llmErrorMessage } from '../llm/client.js'
 import { RECOMMEND_MODES, buildRecommendationRequest, parseRecommendations, pickCandidates } from '../llm/recommend.js'
 import NoWrapParts from '../components/NoWrapParts.jsx'
 
+// 読み込み中は数字の代わりに 3 桁分の空きを取る（読み上げは「読み込み中」）
+function StatNumber({ ready, value }) {
+  if (ready) return value
+  return (
+    <>
+      <Box component="span" aria-hidden="true" sx={{ visibility: 'hidden' }}>
+        000
+      </Box>
+      <Box component="span" sx={visuallyHidden}>
+        読み込み中
+      </Box>
+    </>
+  )
+}
+
 function OptionGroup({ label, options, value, onChange, disabled }) {
   return (
     <Box>
@@ -214,9 +229,9 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
 
       <Paper variant="outlined" component="section" aria-label="おすすめの条件" sx={{ borderRadius: 3, p: 2, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
         <Typography variant="body2">
-          {/* 読み込み中に 0 本と出して、読み込み後に数字だけ変わって行がずれないよう、最初の読み込みが終わるまでは「…」にする */}
-          見た作品 {statsReady ? stats.total : '…'} 本（★評価あり {statsReady ? stats.rated : '…'} 本・うち★4以上 {statsReady ? stats.liked : '…'}{' '}
-          本）をもとに、ローカル LLM が次に見る作品を選びます。
+          {/* 読み込み中に 0 本と出して、読み込み後に数字だけ変わって行がずれないよう、最初の読み込みが終わるまでは 3 桁分の幅を空けておく */}
+          見た作品 <StatNumber ready={statsReady} value={stats.total} /> 本（★評価あり <StatNumber ready={statsReady} value={stats.rated} /> 本・うち★4以上{' '}
+          <StatNumber ready={statsReady} value={stats.liked} /> 本）をもとに、ローカル LLM が次に見る作品を選びます。
         </Typography>
         {records.status === 'ready' && stats.rated === 0 && (
           <Typography variant="body2" color="text.secondary">

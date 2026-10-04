@@ -97,7 +97,13 @@ export default function App() {
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" component="h1" sx={{ flexGrow: 1, fontSize: 18, fontWeight: 700 }}>
+          <Typography
+            variant="h6"
+            component="h1"
+            // ごく狭い画面でも見出しが 2 行になって固定の見出しの高さからはみ出さないよう、1 行に収めて省略する
+            noWrap
+            sx={{ flexGrow: 1, minWidth: 0, fontSize: { xs: 17, sm: 18 }, fontWeight: 700 }}
+          >
             {page === 'watchlist' ? (
               <>
                 <Box component="span" sx={{ fontWeight: 900 }}>
