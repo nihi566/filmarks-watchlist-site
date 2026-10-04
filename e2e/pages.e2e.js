@@ -241,6 +241,33 @@ test.describe('おすすめ', () => {
   })
 })
 
+test.describe('トークン未設定', () => {
+  test.use({ token: '' })
+
+  test('視聴記録: 記録・編集にはトークンが要ることと設定への導線が出て、無いボタンを案内しない', async ({ page, github, errors }) => {
+    github.file.records = { '13580': record('PERFECT BLUE', todayLocal(), { kind: 'anime', minutes: 81 }) }
+    await page.goto('./#/records')
+    await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toBeVisible()
+    await expect(page.getByText('記録の追加・編集には、設定で GitHub トークンを保存してください。')).toBeVisible()
+    await expect(page.getByRole('button', { name: '作品を追加' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '「PERFECT BLUE」の操作' })).toHaveCount(0)
+
+    // 記録の無い月でも、存在しない「作品を追加」を案内しない
+    await page.getByRole('button', { name: '前の月' }).click()
+    await expect(page.getByText('この月の視聴記録はまだありません。')).toBeVisible()
+    await expect(page.getByText(/作品を追加/)).toHaveCount(0)
+
+    await page.getByRole('link', { name: '設定を開く' }).click()
+    await expect(page).toHaveURL(/#\/settings$/)
+    expect(errors).toEqual([])
+  })
+
+  test('おすすめ: ★評価の案内でトークンが要ることを伝える', async ({ page }) => {
+    await page.goto('./#/recommend')
+    await expect(page.getByText('設定で GitHub トークンを保存すると、視聴記録の「記録を編集」から付けられます')).toBeVisible()
+  })
+})
+
 test.describe('おすすめ（モデル未設定）', () => {
   test('設定へ案内し、ボタンは押せない', async ({ page }) => {
     await page.goto('./#/recommend')

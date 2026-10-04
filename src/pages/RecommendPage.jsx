@@ -208,7 +208,11 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
         </Typography>
         {records.status === 'ready' && stats.rated === 0 && (
           <Typography variant="body2" color="text.secondary">
-            見た作品に★評価を付けると、好みに合った提案になります（視聴記録の「記録を編集」から付けられます）。
+            見た作品に★評価を付けると、好みに合った提案になります（
+            {records.canWrite
+              ? '視聴記録の「記録を編集」から付けられます'
+              : '設定で GitHub トークンを保存すると、視聴記録の「記録を編集」から付けられます'}
+            ）。
           </Typography>
         )}
 
