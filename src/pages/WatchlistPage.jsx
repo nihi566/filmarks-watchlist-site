@@ -148,26 +148,65 @@ function Thumbnail({ src }) {
 // 行本体は Filmarks へのリンク、右端の「観る」「見た」ボタンはリンクの外（secondaryAction）に置く。
 // 「観る」はそのサービスでこの作品を開くページ（scraper が Filmarks の配信一覧から取った URL がある作品だけ）
 function MovieRow({ movie, serviceName, onWatch, canWatch }) {
+  const detail = movieDetail(movie)
   return (
-    <ListItem
-      disablePadding
-      secondaryAction={
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          {movie.watch_url && (
-            <IconButton
-              component="a"
-              href={movie.watch_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              size="small"
-              color="primary"
-              aria-label={`${serviceName}で「${movie.title}」を観る（新しいタブで開きます）`}
-              title={`${serviceName}で観る`}
+    // ボタンを絶対配置（secondaryAction）にすると、その幅を見込んだ余白を決め打ちで取ることになり狭い画面で作品名が潰れるので、
+    // 行本体とボタンを横に並べ、ボタンの幅だけを確保して残りを作品名に回す
+    <ListItem disablePadding sx={{ pr: 1.5 }}>
+      <ListItemButton
+        component="a"
+        href={filmarksMovieUrl(movie.movie_id)}
+        target="_blank"
+        rel="noopener"
+        sx={{ gap: 1.5, py: 0.5, pl: 2, pr: 1, minWidth: 0, alignSelf: 'stretch' }}
+      >
+        <Thumbnail src={movie.image} />
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {movie.title}
+          </Typography>
+          {detail && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              component="p"
+              sx={{ lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
             >
-              <PlayCircleOutlineIcon />
-            </IconButton>
+              {detail}
+            </Typography>
           )}
-          <Button
+        </Box>
+        {/* 狭い画面では作品名の幅を優先して、新しいタブの印は出さない（読み上げ用の文言は残す） */}
+        <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, display: { xs: 'none', sm: 'block' } }} />
+        <Box component="span" sx={visuallyHidden}>
+          （新しいタブで開きます）
+        </Box>
+      </ListItemButton>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+        {movie.watch_url && (
+          <IconButton
+            component="a"
+            href={movie.watch_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            size="small"
+            color="primary"
+            aria-label={`${serviceName}で「${movie.title}」を観る（新しいタブで開きます）`}
+            title={`${serviceName}で観る`}
+          >
+            <PlayCircleOutlineIcon />
+          </IconButton>
+        )}
+        <Button
           size="small"
           variant="outlined"
           startIcon={<CheckCircleOutlineIcon />}
@@ -175,45 +214,18 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
           disabled={!canWatch}
           data-watch-id={movie.movie_id}
           aria-label={`「${movie.title}」を見たに記録`}
-          sx={{ borderRadius: 999, minWidth: 0, px: 1.25, whiteSpace: 'nowrap' }}
+          sx={{
+            borderRadius: 999,
+            minWidth: 0,
+            px: 1.25,
+            whiteSpace: 'nowrap',
+            // 狭い画面ではチェックの印を省いて幅を詰める
+            '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
+          }}
         >
           見た
         </Button>
-        </Box>
-      }
-      sx={{ '& .MuiListItemSecondaryAction-root': { right: 12 } }}
-    >
-    <ListItemButton
-      component="a"
-      href={filmarksMovieUrl(movie.movie_id)}
-      target="_blank"
-      rel="noopener"
-      sx={{ gap: 1.5, py: 0.5, pl: 2, pr: `${movie.watch_url ? 130 : 92}px !important` }}
-    >
-      <Thumbnail src={movie.image} />
-      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Typography
-          variant="body2"
-          sx={{
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {movie.title}
-        </Typography>
-        {movieDetail(movie) && (
-          <Typography variant="caption" color="text.secondary" component="p" sx={{ lineHeight: 1.4 }}>
-            {movieDetail(movie)}
-          </Typography>
-        )}
       </Box>
-      <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
-      <Box component="span" sx={visuallyHidden}>
-        （新しいタブで開きます）
-      </Box>
-    </ListItemButton>
     </ListItem>
   )
 }
@@ -240,8 +252,8 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
         sx={{ minHeight: 56, px: 2, '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1.5, my: 1 } }}
       >
         <ServiceIcon name={group.name} size={28} />
-        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>{group.name}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+        <Typography sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: 'anywhere' }}>{group.name}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13, flexShrink: 0, whiteSpace: 'nowrap' }}>
           {group.movies.length}件
         </Typography>
       </AccordionSummary>
@@ -270,10 +282,12 @@ function FetchedAt({ value }) {
       Filmarks からの取得:{' '}
       {fetched ? (
         <>
-          <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>
+          <Box component="span" sx={{ color: 'text.primary', fontWeight: 700, whiteSpace: 'nowrap' }}>
             {fetched.date}
           </Box>
-          （{fetched.ago}）
+          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+            （{fetched.ago}）
+          </Box>
         </>
       ) : (
         '日時不明'
@@ -507,7 +521,8 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   }
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4 }}>
+    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は下の余白を広げる
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? 12 : 4 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"

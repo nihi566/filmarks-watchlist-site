@@ -14,7 +14,17 @@ const theme = createTheme({
   shape: { borderRadius: 8 },
   components: {
     // 狭い画面で Alert の操作ボタン（「設定を開く」「再試行」）が「設定を開/く」と割れないようにする
-    MuiAlert: { styleOverrides: { action: { '& .MuiButton-root': { whiteSpace: 'nowrap' } } } },
+    // 本文が細くなりすぎる狭い画面では、操作ボタンを本文の下の行へ回す
+    MuiAlert: {
+      styleOverrides: {
+        root: { flexWrap: 'wrap' },
+        message: { flex: '1 1 12em', minWidth: 0 },
+        action: { '& .MuiButton-root': { whiteSpace: 'nowrap' } },
+      },
+    },
+    // 区切りの無い長い英数字（URL や英題）が画面の横にはみ出さないよう、はみ出すときだけ途中で折り返す
+    // 段落の最後の 1 文字だけが次の行に残る（「ありませ / ん」）のも避ける
+    MuiCssBaseline: { styleOverrides: { body: { overflowWrap: 'break-word', textWrap: 'pretty' } } },
   },
 })
 

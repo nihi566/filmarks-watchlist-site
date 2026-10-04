@@ -59,7 +59,7 @@ function RecommendationCard({ item, rank }) {
         <MovieIcon />
       </Avatar>
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-        <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, lineHeight: 1.4 }}>
+        <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
           <Box component="span" sx={visuallyHidden}>
             {rank}位:{' '}
           </Box>
@@ -80,7 +80,7 @@ function RecommendationCard({ item, rank }) {
           {!movie && <Chip size="small" label="ウォッチリスト外" />}
         </Box>
         {item.reason && (
-          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
             {item.reason}
           </Typography>
         )}
@@ -176,7 +176,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
   const cancel = () => controller.current?.abort()
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4, display: 'grid', gap: 2 }}>
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
       {!llmSettings.model && (
         <Alert
           severity="info"
@@ -202,7 +202,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
         </Alert>
       )}
 
-      <Paper variant="outlined" component="section" aria-label="おすすめの条件" sx={{ borderRadius: 3, p: 2, display: 'grid', gap: 2 }}>
+      <Paper variant="outlined" component="section" aria-label="おすすめの条件" sx={{ borderRadius: 3, p: 2, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
         <Typography variant="body2">
           見た作品 {stats.total} 本（★評価あり {stats.rated} 本・うち★4以上 {stats.liked} 本）をもとに、ローカル LLM が次に見る作品を選びます。
         </Typography>
@@ -284,7 +284,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
           <Typography component="h2" sx={{ fontWeight: 700, mb: 1 }}>
             おすすめの作品
           </Typography>
-          <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gap: 1.5 }}>
+          <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 1.5 }}>
             {run.results.map((item, index) => (
               <RecommendationCard key={item.movie?.movie_id ?? item.title} item={item} rank={index + 1} />
             ))}

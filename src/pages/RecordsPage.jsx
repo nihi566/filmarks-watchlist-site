@@ -46,6 +46,7 @@ import {
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
+import NoWrapParts from '../components/NoWrapParts.jsx'
 
 // 見たいに戻した作品の行が消えた後のフォーカスの移し先の目印（各作品の ︙ ボタン）
 const menuButtonSelector = (movieId) => `[data-menu-id="${CSS.escape(movieId)}"]`
@@ -56,8 +57,9 @@ function Stat({ label, value, unit }) {
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography component="p" sx={{ fontSize: 28, fontWeight: 800, lineHeight: 1.2 }}>
-        {value}
+      <Typography component="p" sx={{ fontSize: { xs: 24, sm: 28 }, fontWeight: 800, lineHeight: 1.2 }}>
+        {/* 「84時間49分」は「84時間」と「49分」の間でだけ折り返す */}
+        {typeof value === 'string' ? <NoWrapParts parts={value.split(/(?<=時間)/)} /> : value}
         {unit && (
           <Box component="span" sx={{ fontSize: 15, fontWeight: 700, ml: 0.5 }}>
             {unit}
@@ -135,7 +137,7 @@ function YearRatings({ year }) {
             {year.topRated.map((item) => (
               <ListItem key={item.movie_id} disableGutters sx={{ py: 0.25, gap: 1 }}>
                 <ItemRating value={item.rating} />
-                <ListItemText primary={item.title} slotProps={{ primary: { variant: 'body2' } }} sx={{ my: 0 }} />
+                <ListItemText primary={item.title} slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere' } } }} sx={{ my: 0 }} />
               </ListItem>
             ))}
           </List>
@@ -150,19 +152,22 @@ function dayHeading(date) {
   return `${m}月${d}日（${weekdayLabel(date)}）`
 }
 
-// 「アニメ 2本（24話）・邦画 1本」のような種類ごとの内訳
-function kindsText(kinds) {
-  return kinds
-    .map(({ kind, count, episodes }) => `${kindLabel(kind)} ${count}本${kind === 'anime' && episodes > 0 ? `（${episodes}話）` : ''}`)
-    .join('・')
+// 「アニメ 2本（24話）・邦画 1本」のような種類ごとの内訳（1 種類の中では折り返さない）
+function KindsText({ kinds }) {
+  return (
+    <NoWrapParts
+      parts={kinds.map(({ kind, count, episodes }) => `${kindLabel(kind)} ${count}本${kind === 'anime' && episodes > 0 ? `（${episodes}話）` : ''}`)}
+      separator="・"
+    />
+  )
 }
 
-// 一覧の 2 行目: 種類・話数・視聴時間
-function itemDetail(item) {
+// 一覧の 2 行目: 種類・話数・視聴時間（「4時間48 / 分」のように項目の途中で割れないようにする）
+function ItemDetail({ item }) {
   const parts = [kindLabel(item.kind)]
   if (item.kind === 'anime' && item.episodes) parts.push(`${item.episodes}話`)
   parts.push(item.minutes != null ? formatMinutes(item.minutes) : '視聴時間不明')
-  return parts.join('・')
+  return <NoWrapParts parts={parts} separator="・" />
 }
 
 function itemUrl(item) {
@@ -217,11 +222,11 @@ function RecordRow({ item, canEdit, onOpenMenu, dateText }) {
               )}
               <ItemRating value={item.rating} />
               <Box component="span" sx={{ display: 'block' }}>
-                {itemDetail(item)}
+                <ItemDetail item={item} />
               </Box>
             </>
           }
-          slotProps={{ primary: { variant: 'body2' } }}
+          slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere' } } }}
         />
         <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, ml: 1 }} />
         <Box component="span" sx={visuallyHidden}>
@@ -393,7 +398,8 @@ export default function RecordsPage({ records }) {
   const comparison = comparisonText(month.count, previousCount)
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4, display: 'grid', gap: 2 }}>
+    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は下の余白を広げる
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? 12 : 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"
@@ -455,7 +461,7 @@ export default function RecordsPage({ records }) {
       />
 
       {searching ? (
-        <Paper variant="outlined" component="section" aria-label="検索結果" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+        <Paper variant="outlined" component="section" aria-label="検索結果" sx={{ borderRadius: 3, overflow: 'clip' }}>
           <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
             <Typography component="h2" aria-live="polite" sx={{ fontWeight: 700 }}>
               {results.length > 0 ? `「${keyword}」に一致する記録 ${results.length}件` : `「${keyword}」に一致する記録はありません`}
@@ -524,7 +530,7 @@ export default function RecordsPage({ records }) {
             )}
             {month.kinds.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {kindsText(month.kinds)}
+                <KindsText kinds={month.kinds} />
               </Typography>
             )}
             {month.unknownCount > 0 && (
@@ -542,7 +548,7 @@ export default function RecordsPage({ records }) {
             </Box>
             {year.kinds.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {kindsText(year.kinds)}
+                <KindsText kinds={year.kinds} />
               </Typography>
             )}
             <MonthBars
@@ -554,7 +560,7 @@ export default function RecordsPage({ records }) {
             {year.count > 0 && <YearRatings year={year} />}
           </Paper>
 
-          <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'clip' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
               <Typography component="h2" sx={{ fontWeight: 700, flexGrow: 1 }}>
                 見た作品
