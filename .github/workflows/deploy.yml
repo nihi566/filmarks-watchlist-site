@@ -12,9 +12,11 @@ permissions:
   pages: write
   id-token: write
 
+# PR の検証と master のデプロイは別グループにする（PR への push で master のデプロイが取り消されないように）。
+# PR は同じ PR の古い実行だけを取り消し、master のデプロイは途中で取り消さず順番に流す。
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
