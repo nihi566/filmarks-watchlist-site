@@ -152,7 +152,15 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
   return (
     // ボタンを絶対配置（secondaryAction）にすると、その幅を見込んだ余白を決め打ちで取ることになり狭い画面で作品名が潰れるので、
     // 行本体とボタンを横に並べ、ボタンの幅だけを確保して残りを作品名に回す
-    <ListItem disablePadding sx={{ pr: 1.5 }}>
+    // 押せる範囲が行全体に見えるよう、ホバー・フォーカスの色はボタンの下まで含めた行全体に付ける
+    <ListItem
+      disablePadding
+      sx={{
+        pr: 1.5,
+        '&:hover, &:has(.Mui-focusVisible)': { bgcolor: 'action.hover' },
+        '& .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-focusVisible': { bgcolor: 'transparent' },
+      }}
+    >
       <ListItemButton
         component="a"
         href={filmarksMovieUrl(movie.movie_id)}
@@ -206,6 +214,8 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
             <PlayCircleOutlineIcon />
           </IconButton>
         )}
+        {/* 観るボタンの無い行も同じ幅を空けて、広い画面で「見た」と新しいタブの印の位置を行ごとにそろえる */}
+        {!movie.watch_url && <Box aria-hidden="true" sx={{ width: 34, display: { xs: 'none', sm: 'block' } }} />}
         <Button
           size="small"
           variant="outlined"
@@ -238,7 +248,16 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
       elevation={0}
       expanded={expanded}
       onChange={onToggle}
-      slotProps={{ transition: { unmountOnExit: true } }}
+      slotProps={{
+        transition: {
+          unmountOnExit: true,
+          // 上で開いていた長いグループが閉じるとページが縮み、押した見出しが画面の上へ消えるので、見出しまで戻す
+          onEntered: (node) => {
+            const summary = node.closest('.MuiAccordion-root')?.querySelector('[data-group-summary]')
+            if (summary && summary.getBoundingClientRect().top < 0) summary.scrollIntoView({ block: 'start' })
+          },
+        },
+      }}
       sx={{
         bgcolor: 'background.paper',
         borderTop: isFirst ? 0 : 1,
@@ -522,7 +541,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
 
   return (
     // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は下の余白を広げる
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? 12 : 4 }}>
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? { xs: 17, sm: 12 } : 4 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"

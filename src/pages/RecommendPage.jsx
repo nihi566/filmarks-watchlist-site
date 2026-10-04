@@ -26,6 +26,7 @@ import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
 import { chatJson, llmErrorMessage } from '../llm/client.js'
 import { RECOMMEND_MODES, buildRecommendationRequest, parseRecommendations, pickCandidates } from '../llm/recommend.js'
+import NoWrapParts from '../components/NoWrapParts.jsx'
 
 function OptionGroup({ label, options, value, onChange, disabled }) {
   return (
@@ -67,13 +68,21 @@ function RecommendationCard({ item, rank }) {
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, my: 0.75 }}>
           {item.kind && <Chip size="small" color="primary" variant="outlined" label={kindLabel(item.kind)} />}
-          {item.country && <Chip size="small" variant="outlined" label={item.country} />}
+          {item.country && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={<NoWrapParts parts={item.country.split('・')} separator="・" />}
+              sx={{ height: 'auto', maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
+            />
+          )}
           {movie?.runtime_min ? <Chip size="small" label={`${movie.runtime_min}分`} /> : null}
           {movie && (
             // サービスが多いと 1 行に収まらないので、チップの中で折り返す（画面の横にはみ出さないように）
             <Chip
               size="small"
-              label={movie.services.length > 0 ? movie.services.join('・') : '未配信'}
+              // サービス名の途中（「Prime / Video」）では改行しない
+              label={movie.services.length > 0 ? <NoWrapParts parts={movie.services} separator="・" /> : '未配信'}
               sx={{ height: 'auto', maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
             />
           )}

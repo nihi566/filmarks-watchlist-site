@@ -399,7 +399,7 @@ export default function RecordsPage({ records }) {
 
   return (
     // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は下の余白を広げる
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? 12 : 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: notice ? { xs: 17, sm: 12 } : 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"
