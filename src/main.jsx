@@ -12,6 +12,10 @@ const theme = createTheme({
     background: { default: '#f5f7fa' },
   },
   shape: { borderRadius: 8 },
+  components: {
+    // 狭い画面で Alert の操作ボタン（「設定を開く」「再試行」）が「設定を開/く」と割れないようにする
+    MuiAlert: { styleOverrides: { action: { '& .MuiButton-root': { whiteSpace: 'nowrap' } } } },
+  },
 })
 
 ReactDOM.createRoot(document.getElementById('root')).render(

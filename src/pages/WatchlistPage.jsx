@@ -31,6 +31,7 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import UpdateIcon from '@mui/icons-material/Update'
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline'
 import IconButton from '@mui/material/IconButton'
+import CloseIcon from '@mui/icons-material/Close'
 import { visuallyHidden } from '@mui/utils'
 import { serviceIconUrl } from '../serviceIcons.js'
 import WatchDialog from '../components/WatchDialog.jsx'
@@ -453,6 +454,20 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
     setRuntimeMenuAnchor(null)
   }
 
+  const clearSearch = () => {
+    setQuery('')
+    setCollapsedInSearch(new Set())
+    searchRef.current?.focus()
+  }
+
+  // サービス・種類・上映時間の絞り込みをまとめて外す（検索語と並び順は残す）
+  const clearFilters = () => {
+    setServiceFilter(null)
+    setKindFilter('all')
+    setRuntimeLimit(null)
+    searchRef.current?.focus()
+  }
+
   const kindName = kindFilter === 'all' ? '' : kindOptions.find((option) => option.value === kindFilter)?.label
   const runtimeName = runtimeLimit == null ? '' : runtimeLabel(runtimeLimit)
   const filterNames = [serviceFilter, kindName, runtimeName].filter(Boolean)
@@ -689,10 +704,30 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
 
           <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden', bgcolor: 'grey.50' }}>
             {groups.length === 0 ? (
-              <Box sx={{ py: 4, textAlign: 'center' }}>
+              <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
                 <Typography color="text.secondary">
                   {searching ? `「${keyword}」に一致する作品はありません` : '表示できる作品はありません'}
                 </Typography>
+                {/* 0 件の理由になっている条件を見せ、その場で外せるようにする */}
+                {filterNames.length > 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    {searching ? `絞り込み（${filterNames.join('・')}）の中から探しています` : `絞り込み: ${filterNames.join('・')}`}
+                  </Typography>
+                )}
+                {(searching || filterNames.length > 0) && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1, mt: 1.5 }}>
+                    {searching && (
+                      <Button variant="outlined" size="small" onClick={clearSearch}>
+                        検索をクリア
+                      </Button>
+                    )}
+                    {filterNames.length > 0 && (
+                      <Button variant="outlined" size="small" onClick={clearFilters}>
+                        絞り込みを解除
+                      </Button>
+                    )}
+                  </Box>
+                )}
               </Box>
             ) : (
               groups.map((group, index) => (
@@ -752,9 +787,15 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
             onClose={closeNotice}
             action={
               notice.undo ? (
-                <Button ref={undoButton} color="inherit" size="small" onClick={() => undoWatch(notice.undo)}>
-                  元に戻す
-                </Button>
+                // action を渡すと Alert の閉じるボタンが消えるので自分で置く（スマホで下の行を隠したままにしない）
+                <>
+                  <Button ref={undoButton} color="inherit" size="small" onClick={() => undoWatch(notice.undo)}>
+                    元に戻す
+                  </Button>
+                  <IconButton color="inherit" size="small" aria-label="閉じる" onClick={closeNotice}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </>
               ) : undefined
             }
             sx={{ width: '100%' }}

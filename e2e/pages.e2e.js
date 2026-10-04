@@ -25,6 +25,19 @@ test.describe('視聴記録', () => {
     expect(errors).toEqual([])
   })
 
+  test('過去の月から 1 回で今月へ戻れる', async ({ page, github, errors }) => {
+    github.file.records = { '13580': record('PERFECT BLUE', todayLocal(), { kind: 'anime', minutes: 81 }) }
+    await page.goto('./#/records')
+    await expect(page.getByRole('button', { name: '今月へ' })).toHaveCount(0)
+    for (let i = 0; i < 14; i += 1) await page.getByRole('button', { name: '前の月' }).click()
+    await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toHaveCount(0)
+    await page.getByRole('button', { name: '今月へ' }).click()
+    await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: '次の月' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '前の月' })).toBeFocused()
+    expect(errors).toEqual([])
+  })
+
   test('年のまとめに★ごとの本数と★4 以上の作品が出て、種類の絞り込みに従う', async ({ page, github, errors }) => {
     github.file.records = {
       '13580': record('PERFECT BLUE', todayLocal(), { kind: 'anime', minutes: 81, rating: 5 }),
@@ -167,6 +180,13 @@ test.describe('視聴記録', () => {
 
     await page.getByRole('searchbox', { name: '視聴記録をタイトルで検索' }).fill('存在しない')
     await expect(page.getByText('「存在しない」に一致する記録はありません')).toBeVisible()
+    // 0 件の案内から検索をやめて月の表示へ戻れる
+    await page.getByRole('button', { name: '検索をクリア' }).click()
+    await expect(page.getByRole('searchbox', { name: '視聴記録をタイトルで検索' })).toHaveValue('')
+    await expect(page.getByRole('searchbox', { name: '視聴記録をタイトルで検索' })).toBeFocused()
+    // 編集で 2024 年 3 月へ切り替わっているので、その月の一覧に戻る
+    await expect(page.getByRole('heading', { name: '2024年3月' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /^君の名は。/ })).toBeVisible()
     expect(errors).toEqual([])
   })
 
@@ -230,8 +250,19 @@ test.describe('設定', () => {
     await expect(page.getByText('保存済み（末尾 abcd）')).toBeVisible()
     await page.getByRole('button', { name: '接続を確認' }).first().click()
     await expect(page.getByText('接続できました（視聴記録 1件）')).toBeVisible()
+    // 削除は確認してから（発行し直しになるので、押し間違いで消さない）
     await page.getByRole('button', { name: '削除' }).click()
+    const confirm = page.getByRole('dialog', { name: 'トークンを削除しますか？' })
+    await expect(confirm.getByRole('button', { name: 'キャンセル' })).toBeFocused()
+    await confirm.getByRole('button', { name: 'キャンセル' }).click()
+    await expect(confirm).toBeHidden()
+    await expect(page.getByText('保存済み（末尾 abcd）')).toBeVisible()
+    await expect(page.getByRole('button', { name: '削除' })).toBeFocused()
+    await page.getByRole('button', { name: '削除' }).click()
+    await confirm.getByRole('button', { name: '削除する' }).click()
     await expect(page.getByText('トークンを削除しました')).toBeVisible()
+    await expect(confirm).toBeHidden()
+    await expect(page.getByLabel('トークン')).toBeFocused()
     await page.getByLabel('トークン').fill('全角ｔｏｋｅｎ')
     await page.getByRole('button', { name: '保存' }).first().click()
     await expect(page.getByText('トークンに使えない文字')).toBeVisible()

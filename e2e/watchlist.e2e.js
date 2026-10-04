@@ -25,6 +25,25 @@ test.describe('ウォッチリスト', () => {
     await expect(page.getByRole('link', { name: /^20世紀少年 ＜第1章＞/ }).first()).toBeVisible()
     await page.getByRole('searchbox').fill('zzzzzzzz')
     await expect(page.getByText('「zzzzzzzz」に一致する作品はありません')).toBeVisible()
+    // 0 件の案内から検索をやめられる
+    await page.getByRole('button', { name: '検索をクリア' }).click()
+    await expect(page.getByRole('searchbox')).toHaveValue('')
+    await expect(page.getByRole('searchbox')).toBeFocused()
+    await expect(page.getByRole('button', { name: /^U-NEXT/ })).toBeVisible()
+    expect(errors).toEqual([])
+  })
+
+  test('検索と絞り込みで 0 件のとき、絞り込みだけを解除できる', async ({ page, errors }) => {
+    await page.goto('./')
+    await page.getByRole('button', { name: '種類別' }).click()
+    await page.getByRole('menuitem', { name: /^アニメ/ }).click()
+    await page.getByRole('searchbox').fill('インターステラー')
+    await expect(page.getByText('「インターステラー」に一致する作品はありません')).toBeVisible()
+    await expect(page.getByText('絞り込み（アニメ）の中から探しています')).toBeVisible()
+    await page.getByRole('button', { name: '絞り込みを解除' }).click()
+    await expect(page.getByRole('button', { name: '種類別' })).toBeVisible()
+    await expect(page.getByRole('searchbox')).toHaveValue('インターステラー')
+    await expect(page.getByRole('link', { name: /^インターステラー/ }).first()).toBeVisible()
     expect(errors).toEqual([])
   })
 
@@ -110,8 +129,17 @@ test.describe('ウォッチリスト', () => {
     await page.getByRole('button', { name: '「PERFECT BLUE」を見たに記録' }).click()
     await page.getByRole('dialog').getByRole('button', { name: '保存' }).click()
     await expect(page.getByRole('button', { name: '元に戻す' })).toBeFocused()
-    // 「元に戻す」がある通知には閉じるボタンが無いので Esc で閉じる
     await page.keyboard.press('Escape')
+    await expect(page.getByRole('button', { name: '「インターステラー」を見たに記録' })).toBeFocused()
+  })
+
+  test('見たにした後の通知は閉じるボタンで消せ、フォーカスは同じグループの次の作品へ', async ({ page }) => {
+    await page.goto('./')
+    await page.getByRole('button', { name: /^Hulu/ }).click()
+    await page.getByRole('button', { name: '「PERFECT BLUE」を見たに記録' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '保存' }).click()
+    await page.getByRole('button', { name: '閉じる' }).click()
+    await expect(page.getByText('「PERFECT BLUE」を見たに記録しました')).toBeHidden()
     await expect(page.getByRole('button', { name: '「インターステラー」を見たに記録' })).toBeFocused()
   })
 

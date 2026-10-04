@@ -25,6 +25,22 @@ test.describe('スマホ幅', () => {
     test(`${hash} で横スクロールが出ない`, ({ page }) => expectNoHorizontalScroll(page, hash))
   }
 
+  test.describe('トークン未設定', () => {
+    test.use({ token: '' })
+
+    // 「設定を開く」が「設定を開/く」と 2 行に割れると、押せる範囲が読み取りにくい
+    for (const hash of ['#/records', '#/recommend']) {
+      test(`${hash} の案内の「設定を開く」が 1 行に収まる`, async ({ page }) => {
+        await page.goto(`./${hash}`)
+        const button = page.getByRole('link', { name: '設定を開く' })
+        await expect(button).toBeVisible()
+        const lineHeight = await button.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight))
+        const box = await button.boundingBox()
+        expect(box.height).toBeLessThan(lineHeight * 2)
+      })
+    }
+  })
+
   test.describe('320px', () => {
     test.use({ viewport: { width: 320, height: 640 } })
 
