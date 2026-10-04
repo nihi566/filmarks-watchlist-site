@@ -73,7 +73,23 @@ export function summarizeYear(records, year) {
     const { count, minutes } = totals(monthItems)
     return { month: index + 1, count, minutes }
   })
-  return { ...totals(items), kinds: countByKind(items), months }
+  return { ...totals(items), kinds: countByKind(items), months, ...summarizeRatings(items) }
+}
+
+// 年のまとめに出す「★の高い作品」の基準と件数
+export const TOP_RATED_MIN = 4
+export const TOP_RATED_LIMIT = 5
+
+// ★ごとの本数（★5→★1）・未評価の本数と、★4 以上の作品（★の高い順、同じ★は新しい視聴日順）
+function summarizeRatings(items) {
+  const ratingOf = (item) => (Number.isInteger(item.rating) && item.rating >= 1 && item.rating <= 5 ? item.rating : null)
+  const ratings = [5, 4, 3, 2, 1].map((rating) => ({ rating, count: items.filter((item) => ratingOf(item) === rating).length }))
+  const topRated = items
+    .filter((item) => ratingOf(item) >= TOP_RATED_MIN)
+    .sort((a, b) => b.rating - a.rating || (a.watched_on === b.watched_on ? a.title.localeCompare(b.title, 'ja') : a.watched_on < b.watched_on ? 1 : -1))
+    .slice(0, TOP_RATED_LIMIT)
+    .map((item) => ({ ...listItem(item), watched_on: item.watched_on }))
+  return { ratings, unratedCount: items.filter((item) => ratingOf(item) === null).length, topRated }
 }
 
 export function formatMinutes(minutes) {

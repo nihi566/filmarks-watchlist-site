@@ -25,6 +25,25 @@ test.describe('視聴記録', () => {
     expect(errors).toEqual([])
   })
 
+  test('年のまとめに★ごとの本数と★4 以上の作品が出て、種類の絞り込みに従う', async ({ page, github, errors }) => {
+    github.file.records = {
+      '13580': record('PERFECT BLUE', todayLocal(), { kind: 'anime', minutes: 81, rating: 5 }),
+      '564': record('20世紀少年', todayLocal(), { minutes: 142, rating: 4 }),
+      '9002': record('君の名は。', todayLocal(), { kind: 'anime', minutes: 107, rating: 3 }),
+    }
+    await page.goto('./#/records')
+    const yearCard = page.getByRole('region', { name: `${new Date().getFullYear()}年のまとめ` })
+    await expect(yearCard.getByText('★5 1本・★4 1本・★3 1本')).toBeVisible()
+    await expect(yearCard.getByRole('list', { name: '★の高い作品' }).getByRole('listitem')).toHaveText([
+      /PERFECT BLUE/,
+      /20世紀少年/,
+    ])
+    await page.getByRole('button', { name: 'アニメ', exact: true }).click()
+    await expect(yearCard.getByText('★5 1本・★3 1本')).toBeVisible()
+    await expect(yearCard.getByRole('list', { name: '★の高い作品' }).getByRole('listitem')).toHaveText([/PERFECT BLUE/])
+    expect(errors).toEqual([])
+  })
+
   test('作品を追加 → 編集 → 削除 → 元に戻す', async ({ page, github, errors }) => {
     await page.goto('./#/records')
     await page.getByRole('button', { name: '作品を追加' }).click()

@@ -34,7 +34,15 @@ import FilterButton from '../components/FilterButton.jsx'
 import { recordsErrorMessage } from '../records/github.js'
 import { isManualId, newManualId, todayLocal, watchChangeFromEntry } from '../records/records.js'
 import { KIND_FILTERS, RATING_LABELS, filterRecordsByKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
-import { addMonths, formatMinutes, searchRecords, summarizeMonth, summarizeYear, weekdayLabel } from '../records/summary.js'
+import {
+  TOP_RATED_MIN,
+  addMonths,
+  formatMinutes,
+  searchRecords,
+  summarizeMonth,
+  summarizeYear,
+  weekdayLabel,
+} from '../records/summary.js'
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
@@ -102,6 +110,37 @@ function MonthBars({ months, selectedMonth, lastSelectableMonth, onSelect }) {
           </ButtonBase>
         )
       })}
+    </Box>
+  )
+}
+
+// 年のまとめの★評価: ★ごとの本数と、★4 以上の作品（その年のベストを振り返る）
+function YearRatings({ year }) {
+  const counts = year.ratings.filter((item) => item.count > 0)
+  return (
+    <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+        ★評価
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        {counts.length > 0 ? counts.map((item) => `★${item.rating} ${item.count}本`).join('・') : 'まだ★評価を付けた作品はありません'}
+        {counts.length > 0 && year.unratedCount > 0 && `（未評価 ${year.unratedCount}本）`}
+      </Typography>
+      {year.topRated.length > 0 && (
+        <>
+          <Typography variant="body2" sx={{ fontWeight: 700, mt: 1.5 }}>
+            ★{TOP_RATED_MIN}以上の作品
+          </Typography>
+          <List dense disablePadding aria-label="★の高い作品">
+            {year.topRated.map((item) => (
+              <ListItem key={item.movie_id} disableGutters sx={{ py: 0.25, gap: 1 }}>
+                <ItemRating value={item.rating} />
+                <ListItemText primary={item.title} slotProps={{ primary: { variant: 'body2' } }} sx={{ my: 0 }} />
+              </ListItem>
+            ))}
+          </List>
+        </>
+      )}
     </Box>
   )
 }
@@ -487,6 +526,7 @@ export default function RecordsPage({ records }) {
               lastSelectableMonth={period.year === thisYear ? thisMonth : 12}
               onSelect={(selected) => setPeriod({ year: period.year, month: selected })}
             />
+            {year.count > 0 && <YearRatings year={year} />}
           </Paper>
 
           <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'hidden' }}>

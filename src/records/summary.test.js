@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { filterRecordsByKind } from './kinds.js'
 import { addMonths, formatMinutes, searchRecords, summarizeMonth, summarizeYear, weekdayLabel } from './summary.js'
 
 const records = {
@@ -83,6 +84,51 @@ describe('summarizeYear', () => {
 
   it('別の年の記録は含めない', () => {
     expect(summarizeYear(records, 2025)).toMatchObject({ count: 1, minutes: 60 })
+  })
+})
+
+describe('summarizeYear の★評価', () => {
+  const rated = {
+    1: { title: 'A', watched_on: '2026-02-01', minutes: 100, rating: 5, kind: 'anime' },
+    2: { title: 'B', watched_on: '2026-05-01', minutes: 100, rating: 4, kind: 'japanese' },
+    3: { title: 'C', watched_on: '2026-06-01', minutes: 100, rating: 5, kind: 'foreign' },
+    4: { title: 'D', watched_on: '2026-07-01', minutes: 100, rating: 3, kind: 'anime' },
+    5: { title: 'E', watched_on: '2026-08-01', minutes: 100, rating: null, kind: 'anime' },
+    6: { title: 'F', watched_on: '2026-09-01', minutes: 100, rating: 4, kind: 'anime' },
+    7: { title: 'G', watched_on: '2026-09-02', minutes: 100, rating: 4, kind: 'anime' },
+    8: { title: 'H', watched_on: '2026-09-03', minutes: 100, rating: 4, kind: 'anime' },
+    9: { title: '去年', watched_on: '2025-09-03', minutes: 100, rating: 5, kind: 'anime' },
+  }
+
+  it('★ごとの本数（★5→★1）と未評価の本数を返す', () => {
+    const year = summarizeYear(rated, 2026)
+    expect(year.ratings).toEqual([
+      { rating: 5, count: 2 },
+      { rating: 4, count: 4 },
+      { rating: 3, count: 1 },
+      { rating: 2, count: 0 },
+      { rating: 1, count: 0 },
+    ])
+    expect(year.unratedCount).toBe(1)
+  })
+
+  it('★4 以上の作品を★の高い順・同じ★は新しい視聴日順で最大 5 件返す', () => {
+    const year = summarizeYear(rated, 2026)
+    expect(year.topRated.map((item) => item.title)).toEqual(['C', 'A', 'H', 'G', 'F'])
+    expect(year.topRated[0]).toMatchObject({ movie_id: '3', rating: 5, watched_on: '2026-06-01', kind: 'foreign' })
+  })
+
+  it('種類で絞り込んだ記録を渡すと★の集計も絞り込まれる', () => {
+    const year = summarizeYear(filterRecordsByKind(rated, 'anime'), 2026)
+    expect(year.ratings.map((item) => item.count)).toEqual([1, 3, 1, 0, 0])
+    expect(year.topRated.map((item) => item.title)).toEqual(['A', 'H', 'G', 'F'])
+  })
+
+  it('記録が無ければ 0 本・上位作品なし', () => {
+    const year = summarizeYear({}, 2026)
+    expect(year.ratings.every((item) => item.count === 0)).toBe(true)
+    expect(year.topRated).toEqual([])
+    expect(year.unratedCount).toBe(0)
   })
 })
 
