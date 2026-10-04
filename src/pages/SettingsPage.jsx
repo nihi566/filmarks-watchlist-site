@@ -23,7 +23,7 @@ const LM_STUDIO_URL = 'https://lmstudio.ai/'
 
 function Code({ children }) {
   return (
-    <Box component="code" sx={{ px: 0.5, py: 0.25, borderRadius: 0.5, bgcolor: 'grey.100', fontSize: 12.5, wordBreak: 'break-all' }}>
+    <Box component="code" sx={{ px: 0.5, py: 0.25, borderRadius: 0.5, bgcolor: 'grey.100', fontSize: 12.5, overflowWrap: 'anywhere' }}>
       {children}
     </Box>
   )
@@ -84,11 +84,10 @@ function LlmSettingsSection({ settings, onSave }) {
         ローカル LLM（おすすめ機能）
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        「おすすめ」画面では、見た作品と★評価をこの PC で動くローカル LLM に渡して、次に見る作品を選んでもらいます。
-        視聴記録は設定した LLM にだけ送られます。設定はこの端末のブラウザにだけ保存されます。
+        「おすすめ」画面では、見た作品と★評価をこの PC で動くローカル LLM に渡して、次に見る作品を選んでもらいます。視聴記録は設定した LLM にだけ送られます。設定はこの端末のブラウザにだけ保存されます。
       </Typography>
 
-      <Box component="form" onSubmit={save} sx={{ display: 'grid', gap: 2 }}>
+      <Box component="form" onSubmit={save} sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
         <TextField select label="LLM の種類" size="small" value={provider} onChange={(event) => changeProvider(event.target.value)}>
           {PROVIDERS.map((item) => (
             <MenuItem key={item.value} value={item.value}>
@@ -108,10 +107,27 @@ function LlmSettingsSection({ settings, onSave }) {
         <Autocomplete
           freeSolo
           options={models}
+          // 入力済みのモデル名で一覧が 1 件に絞られて他のモデルが見えなくならないよう、一覧はいつも全件を出す
+          filterOptions={(options) => options}
           inputValue={model}
           onInputChange={(_, value) => setModel(value)}
           renderInput={(params) => (
-            <TextField {...params} label="モデル" size="small" helperText="「接続を確認」で入っているモデルの一覧を取得できます（例: qwen2.5:7b）" />
+            <TextField
+              {...params}
+              label="モデル"
+              size="small"
+              helperText={
+                <>
+                  {/* 長いモデル名は入力欄では末尾（サイズや量子化の違い）が省略されるので、全体をここにも出す */}
+                  {model.length > 24 && (
+                    <Box component="span" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
+                      選択中: {model}
+                    </Box>
+                  )}
+                  「接続を確認」で入っているモデルの一覧を取得できます（例: qwen2.5:7b）
+                </>
+              }
+            />
           )}
         />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'flex-end' }}>
@@ -133,7 +149,7 @@ function LlmSettingsSection({ settings, onSave }) {
       <Typography component="h3" sx={{ fontWeight: 700, fontSize: 14, mt: 2, mb: 1 }}>
         準備のしかた
       </Typography>
-      <Box component="ol" sx={{ m: 0, pl: 2.5, typography: 'body2', display: 'grid', gap: 0.75 }}>
+      <Box component="ol" sx={{ m: 0, pl: 2.5, typography: 'body2', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 0.75 }}>
         <li>
           <Link href={OLLAMA_URL} target="_blank" rel="noopener">
             Ollama
@@ -152,8 +168,7 @@ function LlmSettingsSection({ settings, onSave }) {
         <li>上の「接続を確認」でモデルの一覧が出たら、モデルを選んで保存する</li>
       </Box>
       <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
-        LLM を動かしている PC のブラウザ（Chrome・Edge など）から使ってください。スマホからは PC の localhost に届きません。
-        ブラウザに「ローカル ネットワークへのアクセス」の確認が出たら許可してください。
+        LLM を動かしている PC のブラウザ（Chrome・Edge など）から使ってください。スマホからは PC の localhost に届きません。ブラウザに「ローカル ネットワークへのアクセス」の確認が出たら許可してください。
       </Typography>
     </Paper>
   )
@@ -194,7 +209,8 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
         text: `接続できました（視聴記録 ${Object.keys(file.records).length}件）。書き込みの権限は最初に記録を保存したときに確認されます。`,
       })
     } catch (err) {
-      setResult({ severity: 'error', text: recordsErrorMessage(err) })
+      // この画面の中なので「設定画面で」の案内は省く
+      setResult({ severity: 'error', text: recordsErrorMessage(err).replace('設定画面で', '') })
     } finally {
       setChecking(false)
     }
@@ -207,14 +223,13 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
   }
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 2, pb: 4, display: 'grid', gap: 2 }}>
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 2, pb: 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
       <Paper variant="outlined" sx={{ borderRadius: 3, p: 2 }}>
         <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16, mb: 1 }}>
           GitHub トークン
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          「見た」の記録は GitHub の {OWNER}/{REPO}（records ブランチ）に保存し、スマホと PC で共有します。
-          保存するにはトークンが必要です。トークンはこの端末のブラウザにだけ保存され、GitHub 以外へは送信されません。
+          「見た」の記録は GitHub の {OWNER}/{REPO}（records ブランチ）に保存し、スマホと PC で共有します。保存するにはトークンが必要です。トークンはこの端末のブラウザにだけ保存され、GitHub 以外へは送信されません。
         </Typography>
 
         {token ? (
@@ -284,7 +299,7 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
         <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16, mb: 1 }}>
           トークンの発行手順
         </Typography>
-        <Box component="ol" sx={{ m: 0, pl: 2.5, typography: 'body2', display: 'grid', gap: 0.5 }}>
+        <Box component="ol" sx={{ m: 0, pl: 2.5, typography: 'body2', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 0.5 }}>
           <li>
             GitHub の{' '}
             <Link href={NEW_TOKEN_URL} target="_blank" rel="noopener">

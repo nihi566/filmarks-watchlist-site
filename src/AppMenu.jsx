@@ -11,7 +11,8 @@ export default function AppMenu({ open, onClose, currentPage }) {
   return (
     <Drawer anchor="left" open={open} onClose={onClose}>
       <Box component="nav" aria-label="メインメニュー" sx={{ width: 260 }}>
-        <Typography sx={{ px: 2, pt: 2, pb: 1, fontWeight: 900, fontSize: 16 }}>Filmarks 記録帳</Typography>
+        {/* サイト名（タブのタイトル・ウォッチリストの見出し）とそろえる */}
+        <Typography sx={{ px: 2, pt: 2, pb: 1, fontWeight: 900, fontSize: 16 }}>Filmarks ウォッチリスト</Typography>
         <List>
           {PAGES.map(({ id, hash, label, Icon }) => (
             <ListItemButton

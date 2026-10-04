@@ -46,6 +46,10 @@ import {
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
+import NoWrapParts from '../components/NoWrapParts.jsx'
+import { useElementHeight } from '../useElementHeight.js'
+import { keepInPlace } from '../keepInPlace.js'
+import { HEADER_HEIGHT } from '../navigation.js'
 
 // 見たいに戻した作品の行が消えた後のフォーカスの移し先の目印（各作品の ︙ ボタン）
 const menuButtonSelector = (movieId) => `[data-menu-id="${CSS.escape(movieId)}"]`
@@ -56,8 +60,9 @@ function Stat({ label, value, unit }) {
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
-      <Typography component="p" sx={{ fontSize: 28, fontWeight: 800, lineHeight: 1.2 }}>
-        {value}
+      <Typography component="p" sx={{ fontSize: { xs: 24, sm: 28 }, fontWeight: 800, lineHeight: 1.2 }}>
+        {/* 「84時間49分」は「84時間」と「49分」の間でだけ折り返す */}
+        {typeof value === 'string' ? <NoWrapParts parts={value.split(/(?<=時間)/)} /> : value}
         {unit && (
           <Box component="span" sx={{ fontSize: 15, fontWeight: 700, ml: 0.5 }}>
             {unit}
@@ -86,19 +91,24 @@ function MonthBars({ months, selectedMonth, lastSelectableMonth, onSelect }) {
           <ButtonBase
             key={month}
             disabled={month > lastSelectableMonth}
-            onClick={() => onSelect(month)}
+            onClick={(event) => {
+              keepInPlace(event.currentTarget)
+              onSelect(month)
+            }}
             aria-label={`${month}月 ${count}本`}
             aria-pressed={selected}
             sx={{ flexDirection: 'column', justifyContent: 'flex-end', borderRadius: 1, py: 0.5, '&.Mui-disabled': { opacity: 0.4 } }}
           >
-            <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              {count > 0 ? count : ''}
-            </Typography>
-            <Box sx={{ height: 64, width: '70%', display: 'flex', alignItems: 'flex-end' }}>
+            {/* 本数は棒のすぐ上に出す（棒の高さの枠の上に置くと、短い棒から離れて浮いて見える） */}
+            <Box sx={{ height: 82, width: '70%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                {count > 0 ? count : ''}
+              </Typography>
               <Box
                 sx={{
                   width: '100%',
-                  height: count > 0 ? `${Math.max(8, (count / max) * 100)}%` : 2,
+                  flexShrink: 0,
+                  height: count > 0 ? Math.max(5, Math.round((count / max) * 64)) : 2,
                   borderRadius: '4px 4px 0 0',
                   bgcolor: selected ? 'primary.main' : count > 0 ? 'primary.light' : 'grey.300',
                 }}
@@ -123,8 +133,16 @@ function YearRatings({ year }) {
         ★評価
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-        {counts.length > 0 ? counts.map((item) => `★${item.rating} ${item.count}本`).join('・') : 'まだ★評価を付けた作品はありません'}
-        {counts.length > 0 && year.unratedCount > 0 && `（未評価 ${year.unratedCount}本）`}
+        {counts.length > 0 ? (
+          <NoWrapParts parts={counts.map((item) => `★${item.rating} ${item.count}本`)} separator="・" />
+        ) : (
+          'まだ★評価を付けた作品はありません'
+        )}
+        {counts.length > 0 && year.unratedCount > 0 && (
+          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+            （未評価 {year.unratedCount}本）
+          </Box>
+        )}
       </Typography>
       {year.topRated.length > 0 && (
         <>
@@ -135,7 +153,7 @@ function YearRatings({ year }) {
             {year.topRated.map((item) => (
               <ListItem key={item.movie_id} disableGutters sx={{ py: 0.25, gap: 1 }}>
                 <ItemRating value={item.rating} />
-                <ListItemText primary={item.title} slotProps={{ primary: { variant: 'body2' } }} sx={{ my: 0 }} />
+                <ListItemText primary={item.title} slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere', wordBreak: 'normal' } } }} sx={{ my: 0 }} />
               </ListItem>
             ))}
           </List>
@@ -150,19 +168,22 @@ function dayHeading(date) {
   return `${m}月${d}日（${weekdayLabel(date)}）`
 }
 
-// 「アニメ 2本（24話）・邦画 1本」のような種類ごとの内訳
-function kindsText(kinds) {
-  return kinds
-    .map(({ kind, count, episodes }) => `${kindLabel(kind)} ${count}本${kind === 'anime' && episodes > 0 ? `（${episodes}話）` : ''}`)
-    .join('・')
+// 「アニメ 2本（24話）・邦画 1本」のような種類ごとの内訳（1 種類の中では折り返さない）
+function KindsText({ kinds }) {
+  return (
+    <NoWrapParts
+      parts={kinds.map(({ kind, count, episodes }) => `${kindLabel(kind)} ${count}本${kind === 'anime' && episodes > 0 ? `（${episodes}話）` : ''}`)}
+      separator="・"
+    />
+  )
 }
 
-// 一覧の 2 行目: 種類・話数・視聴時間
-function itemDetail(item) {
+// 一覧の 2 行目: 種類・話数・視聴時間（「4時間48 / 分」のように項目の途中で割れないようにする）
+function ItemDetail({ item }) {
   const parts = [kindLabel(item.kind)]
   if (item.kind === 'anime' && item.episodes) parts.push(`${item.episodes}話`)
   parts.push(item.minutes != null ? formatMinutes(item.minutes) : '視聴時間不明')
-  return parts.join('・')
+  return <NoWrapParts parts={parts} separator="・" />
 }
 
 function itemUrl(item) {
@@ -181,6 +202,8 @@ function RecordRow({ item, canEdit, onOpenMenu, dateText }) {
   return (
     <ListItem
       disablePadding
+      // 日付の見出し（36px）も画面の上に固定されるので、キーボードで移ったフォーカスがその下に隠れないよう、見出しの分も空ける
+      sx={{ '& :is(a, button)': { scrollMarginTop: { xs: 92, sm: 100 } } }}
       secondaryAction={
         canEdit && (
           <IconButton
@@ -217,11 +240,11 @@ function RecordRow({ item, canEdit, onOpenMenu, dateText }) {
               )}
               <ItemRating value={item.rating} />
               <Box component="span" sx={{ display: 'block' }}>
-                {itemDetail(item)}
+                <ItemDetail item={item} />
               </Box>
             </>
           }
-          slotProps={{ primary: { variant: 'body2' } }}
+          slotProps={{ primary: { variant: 'body2', sx: { overflowWrap: 'anywhere', wordBreak: 'normal' } } }}
         />
         <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, ml: 1 }} />
         <Box component="span" sx={visuallyHidden}>
@@ -272,6 +295,7 @@ export default function RecordsPage({ records }) {
   const recordsRetry = useRetryFocus(records.status, () => addButton.current?.focus())
   const undoButton = useRef(null)
   const noticeRoot = useRef(null)
+  const noticeHeight = useElementHeight(noticeRoot, Boolean(notice))
   // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
   const restoreOnExit = useRef(false)
   const [focusRequest, setFocusRequest] = useState(null)
@@ -393,7 +417,8 @@ export default function RecordsPage({ records }) {
   const comparison = comparisonText(month.count, previousCount)
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4, display: 'grid', gap: 2 }}>
+    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は通知の高さの分だけ下の余白を広げる
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: noticeHeight > 0 ? `${noticeHeight + 32}px` : 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"
@@ -455,7 +480,7 @@ export default function RecordsPage({ records }) {
       />
 
       {searching ? (
-        <Paper variant="outlined" component="section" aria-label="検索結果" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+        <Paper variant="outlined" component="section" aria-label="検索結果" sx={{ borderRadius: 3, overflow: 'clip' }}>
           <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
             <Typography component="h2" aria-live="polite" sx={{ fontWeight: 700 }}>
               {results.length > 0 ? `「${keyword}」に一致する記録 ${results.length}件` : `「${keyword}」に一致する記録はありません`}
@@ -524,7 +549,7 @@ export default function RecordsPage({ records }) {
             )}
             {month.kinds.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {kindsText(month.kinds)}
+                <KindsText kinds={month.kinds} />
               </Typography>
             )}
             {month.unknownCount > 0 && (
@@ -542,7 +567,7 @@ export default function RecordsPage({ records }) {
             </Box>
             {year.kinds.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {kindsText(year.kinds)}
+                <KindsText kinds={year.kinds} />
               </Typography>
             )}
             <MonthBars
@@ -554,7 +579,7 @@ export default function RecordsPage({ records }) {
             {year.count > 0 && <YearRatings year={year} />}
           </Paper>
 
-          <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Paper variant="outlined" component="section" aria-label="見た作品" sx={{ borderRadius: 3, overflow: 'clip' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
               <Typography component="h2" sx={{ fontWeight: 700, flexGrow: 1 }}>
                 見た作品
@@ -564,7 +589,11 @@ export default function RecordsPage({ records }) {
                   ref={addButton}
                   size="small"
                   startIcon={<AddIcon />}
-                  onClick={() => setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })}
+                  onClick={() => {
+                    // 前の通知が残っていると、ダイアログの保存ボタンの上に重なる
+                    setNotice(null)
+                    setEditTarget({ movie: { movie_id: newManualId(), title: '', image: '' }, isNew: true })
+                  }}
                 >
                   作品を追加
                 </Button>
@@ -576,7 +605,15 @@ export default function RecordsPage({ records }) {
                   {kindFilter !== 'all'
                     ? 'この月に、この種類の視聴記録はありません。'
                     : records.canWrite
-                      ? 'この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は「作品を追加」から記録できます。'
+                      ? (
+                        <>
+                          この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は
+                          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+                            「作品を追加」
+                          </Box>
+                          から記録できます。
+                        </>
+                      )
                       : 'この月の視聴記録はまだありません。'}
                 </Typography>
                 <Button variant="outlined" href="#/">
@@ -588,7 +625,7 @@ export default function RecordsPage({ records }) {
                 {month.days.map((day) => (
                   <li key={day.date}>
                     <List disablePadding>
-                      <ListSubheader sx={{ bgcolor: 'grey.50', fontWeight: 700, lineHeight: '36px' }}>{dayHeading(day.date)}</ListSubheader>
+                      <ListSubheader sx={{ bgcolor: 'grey.50', fontWeight: 700, lineHeight: '36px', top: HEADER_HEIGHT }}>{dayHeading(day.date)}</ListSubheader>
                       {day.items.map((item) => (
                         <RecordRow key={item.movie_id} item={item} canEdit={canEdit} onOpenMenu={openMenu} />
                       ))}
@@ -606,6 +643,7 @@ export default function RecordsPage({ records }) {
           onClick={() => {
             const { item } = menu
             closeMenu()
+            setNotice(null)
             setEditTarget({ movie: item, initial: entries[item.movie_id] })
           }}
         >

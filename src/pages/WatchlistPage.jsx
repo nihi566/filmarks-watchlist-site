@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
@@ -47,6 +47,9 @@ import { matchesKeyword, normalizeForSearch } from '../searchText.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 import { readViewFromSearch, viewToSearch, withSearch } from '../watchlistUrl.js'
 import { RUNTIME_LIMITS, filterTabsByRuntime, runtimeLabel } from '../runtimeFilter.js'
+import { useElementHeight } from '../useElementHeight.js'
+import { rememberOpenGroup, rememberedOpenGroup } from '../scrollMemory.js'
+import { keepInPlace } from '../keepInPlace.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
@@ -90,6 +93,7 @@ function sortGroups(tabs, sortKey) {
 
 // 押した行が一覧から消えるとフォーカスが body（ページ先頭）へ落ちるので、近くの要素へ移すための目印
 const watchButtonSelector = (movieId) => `[data-watch-id="${CSS.escape(movieId)}"]`
+const RECORDS_WAIT_MS = 1500
 const groupSummarySelector = (name) => `[data-group-summary="${CSS.escape(name)}"]`
 
 function toggled(set, name) {
@@ -148,26 +152,78 @@ function Thumbnail({ src }) {
 // 行本体は Filmarks へのリンク、右端の「観る」「見た」ボタンはリンクの外（secondaryAction）に置く。
 // 「観る」はそのサービスでこの作品を開くページ（scraper が Filmarks の配信一覧から取った URL がある作品だけ）
 function MovieRow({ movie, serviceName, onWatch, canWatch }) {
+  const detail = movieDetail(movie)
   return (
+    // ボタンを絶対配置（secondaryAction）にすると、その幅を見込んだ余白を決め打ちで取ることになり狭い画面で作品名が潰れるので、
+    // 行本体とボタンを横に並べ、ボタンの幅だけを確保して残りを作品名に回す
+    // 押せる範囲が行全体に見えるよう、ホバー・フォーカスの色はボタンの下まで含めた行全体に付ける
     <ListItem
       disablePadding
-      secondaryAction={
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          {movie.watch_url && (
-            <IconButton
-              component="a"
-              href={movie.watch_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              size="small"
-              color="primary"
-              aria-label={`${serviceName}で「${movie.title}」を観る（新しいタブで開きます）`}
-              title={`${serviceName}で観る`}
+      sx={{
+        pr: 1.5,
+        '&:hover, &:has(.Mui-focusVisible)': { bgcolor: 'action.hover' },
+        '& .MuiListItemButton-root:hover, & .MuiListItemButton-root.Mui-focusVisible': { bgcolor: 'transparent' },
+      }}
+    >
+      <ListItemButton
+        component="a"
+        href={filmarksMovieUrl(movie.movie_id)}
+        target="_blank"
+        rel="noopener"
+        sx={{ gap: 1.5, py: 0.5, pl: 2, pr: 1, minWidth: 0, alignSelf: 'stretch' }}
+      >
+        <Thumbnail src={movie.image} />
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              overflowWrap: 'anywhere',
+              wordBreak: 'normal',
+            }}
+          >
+            {movie.title}
+          </Typography>
+          {detail && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              component="p"
+              sx={{ lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
             >
-              <PlayCircleOutlineIcon />
-            </IconButton>
+              {detail}
+            </Typography>
           )}
-          <Button
+        </Box>
+        {/* 狭い画面では作品名の幅を優先して、新しいタブの印は出さない（読み上げ用の文言は残す） */}
+        <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0, display: { xs: 'none', sm: 'block' } }} />
+        <Box component="span" sx={visuallyHidden}>
+          （新しいタブで開きます）
+        </Box>
+      </ListItemButton>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+        {movie.watch_url && (
+          <IconButton
+            component="a"
+            href={movie.watch_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            size="small"
+            color="primary"
+            // スマホでも押しやすいよう、xs では押せる範囲を 40px にする
+            sx={{ p: { xs: 1, sm: 0.625 } }}
+            aria-label={`${serviceName}で「${movie.title}」を観る（新しいタブで開きます）`}
+            title={`${serviceName}で観る`}
+          >
+            <PlayCircleOutlineIcon />
+          </IconButton>
+        )}
+        {/* 観るボタンの無い行も同じ幅を空けて、広い画面で「見た」と新しいタブの印の位置を行ごとにそろえる */}
+        {!movie.watch_url && <Box aria-hidden="true" sx={{ width: 34, display: { xs: 'none', sm: 'block' } }} />}
+        <Button
           size="small"
           variant="outlined"
           startIcon={<CheckCircleOutlineIcon />}
@@ -175,47 +231,33 @@ function MovieRow({ movie, serviceName, onWatch, canWatch }) {
           disabled={!canWatch}
           data-watch-id={movie.movie_id}
           aria-label={`「${movie.title}」を見たに記録`}
-          sx={{ borderRadius: 999, minWidth: 0, px: 1.25, whiteSpace: 'nowrap' }}
+          sx={{
+            borderRadius: 999,
+            minWidth: 0,
+            px: 1.25,
+            minHeight: { xs: 40, sm: 'auto' },
+            whiteSpace: 'nowrap',
+            // 狭い画面ではチェックの印を省いて幅を詰める
+            '& .MuiButton-startIcon': { display: { xs: 'none', sm: 'inherit' } },
+          }}
         >
           見た
         </Button>
-        </Box>
-      }
-      sx={{ '& .MuiListItemSecondaryAction-root': { right: 12 } }}
-    >
-    <ListItemButton
-      component="a"
-      href={filmarksMovieUrl(movie.movie_id)}
-      target="_blank"
-      rel="noopener"
-      sx={{ gap: 1.5, py: 0.5, pl: 2, pr: `${movie.watch_url ? 130 : 92}px !important` }}
-    >
-      <Thumbnail src={movie.image} />
-      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Typography
-          variant="body2"
-          sx={{
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {movie.title}
-        </Typography>
-        {movieDetail(movie) && (
-          <Typography variant="caption" color="text.secondary" component="p" sx={{ lineHeight: 1.4 }}>
-            {movieDetail(movie)}
-          </Typography>
-        )}
       </Box>
-      <OpenInNewIcon aria-hidden="true" sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
-      <Box component="span" sx={visuallyHidden}>
-        （新しいタブで開きます）
-      </Box>
-    </ListItemButton>
     </ListItem>
   )
+}
+
+// 「WOWOWオンデマンド」のような英字と日本語のつながった名前は 1 語として扱われ、狭い画面で「オンデマン / ド」と割れるので、
+// 英数字と日本語の境目で改行できるようにする
+function BreakableName({ name }) {
+  const parts = name.split(/(?<=[A-Za-z0-9])(?=[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}])/u)
+  return parts.map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ))
 }
 
 function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch }) {
@@ -240,9 +282,15 @@ function ServiceGroup({ group, expanded, onToggle, isFirst, onWatch, canWatch })
         sx={{ minHeight: 56, px: 2, '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1.5, my: 1 } }}
       >
         <ServiceIcon name={group.name} size={28} />
-        <Typography sx={{ fontWeight: 700, fontSize: 15 }}>{group.name}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
-          {group.movies.length}件
+        {/* 件数は名前と同じ行の中に続けて置く（名前が 2 行になっても、件数が右端へ離れない） */}
+        <Typography sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: 'anywhere' }}>
+          <BreakableName name={group.name} />
+          <Box
+            component="span"
+            sx={{ ml: 1.5, fontSize: 13, fontWeight: 400, color: 'text.secondary', whiteSpace: 'nowrap', display: 'inline-block' }}
+          >
+            {group.movies.length}件
+          </Box>
         </Typography>
       </AccordionSummary>
       <AccordionDetails sx={{ p: 0, pb: 1 }}>
@@ -270,10 +318,12 @@ function FetchedAt({ value }) {
       Filmarks からの取得:{' '}
       {fetched ? (
         <>
-          <Box component="span" sx={{ color: 'text.primary', fontWeight: 700 }}>
+          <Box component="span" sx={{ color: 'text.primary', fontWeight: 700, whiteSpace: 'nowrap' }}>
             {fetched.date}
           </Box>
-          （{fetched.ago}）
+          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+            （{fetched.ago}）
+          </Box>
         </>
       ) : (
         '日時不明'
@@ -308,7 +358,12 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   const [sortKey, setSortKey] = useState(initialView.sort)
   const [movieOrder, setMovieOrder] = useState(initialView.order)
   // 同時に開けるグループは 1 つだけ（別のグループを開くと前のグループは閉じる）
-  const [expandedName, setExpandedName] = useState(initialView.service)
+  // 戻る・進むで戻ってきたときは、離れる前に開いていたグループを開く
+  const [expandedName, setExpandedName] = useState(() => {
+    const remembered = rememberedOpenGroup()
+    return remembered !== undefined ? remembered : initialView.service
+  })
+  useEffect(() => rememberOpenGroup(expandedName), [expandedName])
   // 検索中は一致したグループを既定で開き、利用者が閉じたものだけを覚える
   const [collapsedInSearch, setCollapsedInSearch] = useState(new Set())
   const [serviceMenuAnchor, setServiceMenuAnchor] = useState(null)
@@ -325,6 +380,15 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   const returnFocus = useRef([])
   const undoButton = useRef(null)
   const noticeRoot = useRef(null)
+  // 視聴記録が後から届くと、見た作品が一覧から抜けてグループが並び替わり、画面が大きくずれる。
+  // 最初の読み込みが終わるまで（遅いときは少し待つだけで）一覧を出さない
+  const [recordsWaitOver, setRecordsWaitOver] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setRecordsWaitOver(true), RECORDS_WAIT_MS)
+    return () => clearTimeout(timer)
+  }, [])
+  const recordsSettled = records.status !== 'loading' || Boolean(records.file) || recordsWaitOver
+  const noticeHeight = useElementHeight(noticeRoot, Boolean(notice))
   // 通知を閉じた瞬間にフォーカスが通知の中にあったか（空白をクリックして外した人の画面を引き戻さない）
   const restoreOnExit = useRef(false)
   const [focusRequest, setFocusRequest] = useState(null)
@@ -429,6 +493,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
 
   const isExpanded = (name) => (searching ? !collapsedInSearch.has(name) : expandedName === name)
   const toggleGroup = (name) => {
+    keepInPlace(document.querySelector(groupSummarySelector(name)))
     if (searching) setCollapsedInSearch((set) => toggled(set, name))
     else setExpandedName((current) => (current === name ? null : name))
   }
@@ -486,6 +551,8 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
       prev && watchButtonSelector(prev.movie_id),
       groupSummarySelector(group.name),
     ]
+    // 前の通知が残っていると、ダイアログの保存ボタンの上に重なる
+    setNotice(null)
     setWatchTarget(movie)
   }
 
@@ -507,7 +574,8 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   }
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4 }}>
+    // 下に出る通知（Snackbar）が一覧の最後の行を隠さないよう、出ている間は通知の高さの分だけ下の余白を広げる
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: noticeHeight > 0 ? `${noticeHeight + 32}px` : 4 }}>
       {records.status === 'error' && (
         <Alert
           severity="warning"
@@ -534,13 +602,13 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
         </Alert>
       )}
 
-      {!data && !error && (
+      {!(data && recordsSettled) && !error && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress aria-label="ウォッチリストを読み込み中" />
         </Box>
       )}
 
-      {data && (
+      {data && recordsSettled && (
         <>
           <FetchedAt value={data.generated_at} />
 
@@ -565,7 +633,22 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
             sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
           />
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5, mb: 1.5 }}>
+          {/* 狭い画面で絞り込みボタンが 3〜4 行を占めて一覧が下へ押し出されないよう、xs では 1 行にして横にスクロールさせる */}
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: { xs: 'nowrap', sm: 'wrap' },
+              overflowX: { xs: 'auto', sm: 'visible' },
+              scrollbarWidth: 'none',
+              '&::-webkit-scrollbar': { display: 'none' },
+              mx: { xs: -2, sm: 0 },
+              px: { xs: 2, sm: 0 },
+              '& > .MuiButton-root': { flexShrink: 0 },
+              gap: 1,
+              mt: 1.5,
+              mb: 1.5,
+            }}
+          >
             <FilterButton selected={!serviceFilter} aria-pressed={!serviceFilter} onClick={() => selectService(null)}>
               すべて {uniqueCount}
             </FilterButton>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -121,16 +121,31 @@ export default function WatchDialog({
 
   const shownRating = hoverRating > 0 ? hoverRating : rating
 
+  // 保存エラーは入力欄の下（見えない位置）に出ることがあるので、出たときに 1 回だけそこまでスクロールする
+  const errorRef = useRef(null)
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [error])
+
   return (
-    <Dialog open onClose={close} fullWidth maxWidth="xs">
-      <Box component="form" onSubmit={submit} noValidate>
+    <Dialog
+      open
+      onClose={close}
+      fullWidth
+      maxWidth="xs"
+    >
+      {/* form が Paper と DialogContent の間に入るので、縦に flex にしないと高さが足りないときに本文だけでなく保存ボタンまで画面外へ流れる */}
+      <Box component="form" onSubmit={submit} noValidate sx={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <DialogTitle>{title}</DialogTitle>
-        <DialogContent sx={{ display: 'grid', gap: 2 }}>
+        <DialogContent sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
           {editableTitle ? (
             <TextField
               label="タイトル"
               size="small"
               required
+              // 長いタイトルも全体を確かめられるよう、3 行まで折り返して見せる
+              multiline
+              maxRows={3}
               value={titleText}
               onChange={(event) => setTitleText(event.target.value)}
               helperText="ウォッチリストに無い作品（テレビアニメなど）を記録できます"
@@ -177,7 +192,8 @@ export default function WatchDialog({
                 <FormLabel id="watch-rating-label" sx={{ fontSize: 13, mb: 0.5 }}>
                   評価
                 </FormLabel>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                {/* ★にカーソルを乗せると説明の長さが変わるので、説明は下の行に分けて行の高さを変えない */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Rating
                     name="watch-rating"
                     size="large"
@@ -189,15 +205,15 @@ export default function WatchDialog({
                     role="radiogroup"
                     aria-labelledby="watch-rating-label"
                   />
-                  <Typography variant="body2" color={shownRating ? 'text.primary' : 'text.secondary'} aria-hidden="true">
-                    {ratingText(shownRating)}
-                  </Typography>
                   {rating && (
-                    <Button size="small" onClick={() => setRating(null)} disabled={saving} sx={{ minWidth: 0 }}>
+                    <Button size="small" onClick={() => setRating(null)} disabled={saving} sx={{ minWidth: 0, whiteSpace: 'nowrap' }}>
                       評価を外す
                     </Button>
                   )}
                 </Box>
+                <Typography variant="body2" color={shownRating ? 'text.primary' : 'text.secondary'} aria-hidden="true">
+                  {ratingText(shownRating)}
+                </Typography>
               </FormControl>
 
               <TextField
@@ -214,7 +230,7 @@ export default function WatchDialog({
 
               {isAnime ? (
                 <Box>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 1.5 }}>
                     <TextField
                       label="見た話数"
                       type="number"
@@ -265,7 +281,7 @@ export default function WatchDialog({
             </Alert>
           )}
           {error && (
-            <Alert severity="error" role="alert">
+            <Alert severity="error" role="alert" ref={errorRef}>
               {error}
             </Alert>
           )}

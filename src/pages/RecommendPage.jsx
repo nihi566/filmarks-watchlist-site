@@ -26,6 +26,22 @@ import { focusFirst } from '../focusFirst.js'
 import { useRetryFocus } from '../useRetryFocus.js'
 import { chatJson, llmErrorMessage } from '../llm/client.js'
 import { RECOMMEND_MODES, buildRecommendationRequest, parseRecommendations, pickCandidates } from '../llm/recommend.js'
+import NoWrapParts from '../components/NoWrapParts.jsx'
+
+// 読み込み中は数字の代わりに 3 桁分の空きを取る（読み上げは「読み込み中」）
+function StatNumber({ ready, value }) {
+  if (ready) return value
+  return (
+    <>
+      <Box component="span" aria-hidden="true" sx={{ visibility: 'hidden' }}>
+        000
+      </Box>
+      <Box component="span" sx={visuallyHidden}>
+        読み込み中
+      </Box>
+    </>
+  )
+}
 
 function OptionGroup({ label, options, value, onChange, disabled }) {
   return (
@@ -59,7 +75,7 @@ function RecommendationCard({ item, rank }) {
         <MovieIcon />
       </Avatar>
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-        <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, lineHeight: 1.4 }}>
+        <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, lineHeight: 1.4, overflowWrap: 'anywhere', wordBreak: 'normal' }}>
           <Box component="span" sx={visuallyHidden}>
             {rank}位:{' '}
           </Box>
@@ -67,20 +83,28 @@ function RecommendationCard({ item, rank }) {
         </Typography>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, my: 0.75 }}>
           {item.kind && <Chip size="small" color="primary" variant="outlined" label={kindLabel(item.kind)} />}
-          {item.country && <Chip size="small" variant="outlined" label={item.country} />}
+          {item.country && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={<NoWrapParts parts={item.country.split('・')} separator="・" />}
+              sx={{ height: 'auto', maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
+            />
+          )}
           {movie?.runtime_min ? <Chip size="small" label={`${movie.runtime_min}分`} /> : null}
           {movie && (
             // サービスが多いと 1 行に収まらないので、チップの中で折り返す（画面の横にはみ出さないように）
             <Chip
               size="small"
-              label={movie.services.length > 0 ? movie.services.join('・') : '未配信'}
+              // サービス名の途中（「Prime / Video」）では改行しない
+              label={movie.services.length > 0 ? <NoWrapParts parts={movie.services} separator="・" /> : '未配信'}
               sx={{ height: 'auto', maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal', py: 0.25 } }}
             />
           )}
           {!movie && <Chip size="small" label="ウォッチリスト外" />}
         </Box>
         {item.reason && (
-          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
             {item.reason}
           </Typography>
         )}
@@ -136,6 +160,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
   const running = run.status === 'running'
   const needsWatchlist = mode === 'watchlist'
   const watchlistReady = Boolean(watchlist.data)
+  const statsReady = records.status !== 'loading' || Boolean(records.file)
   const canRun = Boolean(llmSettings.model) && records.status !== 'loading' && (!needsWatchlist || watchlistReady) && !running
 
   const ask = async () => {
@@ -176,7 +201,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
   const cancel = () => controller.current?.abort()
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4, display: 'grid', gap: 2 }}>
+    <Box sx={{ maxWidth: 600, mx: 'auto', px: 2, pt: 1.5, pb: 4, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
       {!llmSettings.model && (
         <Alert
           severity="info"
@@ -202,9 +227,11 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
         </Alert>
       )}
 
-      <Paper variant="outlined" component="section" aria-label="おすすめの条件" sx={{ borderRadius: 3, p: 2, display: 'grid', gap: 2 }}>
+      <Paper variant="outlined" component="section" aria-label="おすすめの条件" sx={{ borderRadius: 3, p: 2, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 2 }}>
         <Typography variant="body2">
-          見た作品 {stats.total} 本（★評価あり {stats.rated} 本・うち★4以上 {stats.liked} 本）をもとに、ローカル LLM が次に見る作品を選びます。
+          {/* 読み込み中に 0 本と出して、読み込み後に数字だけ変わって行がずれないよう、最初の読み込みが終わるまでは 3 桁分の幅を空けておく */}
+          見た作品 <StatNumber ready={statsReady} value={stats.total} /> 本（★評価あり <StatNumber ready={statsReady} value={stats.rated} /> 本・うち★4以上{' '}
+          <StatNumber ready={statsReady} value={stats.liked} /> 本）をもとに、ローカル LLM が次に見る作品を選びます。
         </Typography>
         {records.status === 'ready' && stats.rated === 0 && (
           <Typography variant="body2" color="text.secondary">
@@ -284,7 +311,7 @@ export default function RecommendPage({ records, watchlist, llmSettings }) {
           <Typography component="h2" sx={{ fontWeight: 700, mb: 1 }}>
             おすすめの作品
           </Typography>
-          <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gap: 1.5 }}>
+          <Box component="ol" sx={{ m: 0, p: 0, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 1.5 }}>
             {run.results.map((item, index) => (
               <RecommendationCard key={item.movie?.movie_id ?? item.title} item={item} rank={index + 1} />
             ))}
