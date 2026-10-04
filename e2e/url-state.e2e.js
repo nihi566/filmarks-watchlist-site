@@ -45,6 +45,35 @@ test.describe('見え方を URL で保つ', () => {
     await expect(page).toHaveURL(/filmarks-watchlist-site\/#\/$/)
   })
 
+  test('上映時間の上限で絞り込め、件数・サービス一覧に反映され、URL に残る', async ({ page, errors }) => {
+    await page.goto('./#/')
+    await expect(page.getByRole('button', { name: /^すべて 6/ })).toBeVisible()
+    await page.getByRole('button', { name: '上映時間' }).click()
+    // 件数は重複を除いた作品数（120分以内: PERFECT BLUE 81分・君の名は。107分）
+    await expect(page.getByRole('menuitem', { name: /120分以内\s*2件/ })).toBeVisible()
+    await page.getByRole('menuitem', { name: /120分以内/ }).click()
+    await expect(page).toHaveURL(/\?runtime=120#\/$/)
+    await expect(page.getByRole('button', { name: '120分以内', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^すべて 2/ })).toBeVisible()
+    // 収まる作品の無いサービス（U-NEXT・未配信）は一覧から消える
+    await expect(page.getByRole('button', { name: /^Hulu\s*2件/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^Netflix\s*1件/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^U-NEXT/ })).toHaveCount(0)
+    await page.getByRole('button', { name: 'サービス別' }).click()
+    await expect(page.getByRole('menuitem')).toHaveCount(2)
+    await page.keyboard.press('Escape')
+
+    await page.reload()
+    await expect(page.getByRole('button', { name: '120分以内', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^すべて 2/ })).toBeVisible()
+
+    await page.getByRole('button', { name: '120分以内', exact: true }).click()
+    await page.getByRole('menuitem', { name: /指定なし/ }).click()
+    await expect(page).toHaveURL(/filmarks-watchlist-site\/#\/$/)
+    await expect(page.getByRole('button', { name: /^すべて 6/ })).toBeVisible()
+    expect(errors).toEqual([])
+  })
+
   test('他のページへ移って戻っても絞り込みが残る', async ({ page }) => {
     await page.goto('./')
     await page.getByRole('button', { name: 'サービス別' }).click()

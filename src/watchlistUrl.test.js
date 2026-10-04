@@ -8,11 +8,24 @@ describe('readViewFromSearch', () => {
 
   it('URL のクエリから絞り込み・検索・並び順を読む', () => {
     const search = `?service=${encodeURIComponent('U-NEXT')}&kind=anime&q=${encodeURIComponent('いんたー')}&sort=name&order=clip`
-    expect(readViewFromSearch(search)).toEqual({ service: 'U-NEXT', kind: 'anime', query: 'いんたー', sort: 'name', order: 'clip' })
+    expect(readViewFromSearch(search)).toEqual({
+      service: 'U-NEXT',
+      kind: 'anime',
+      query: 'いんたー',
+      sort: 'name',
+      order: 'clip',
+      runtime: null,
+    })
+  })
+
+  it('上映時間の上限（runtime）は選べる値だけ読む', () => {
+    expect(readViewFromSearch('?runtime=120').runtime).toBe(120)
+    expect(readViewFromSearch('?runtime=100').runtime).toBeNull()
+    expect(readViewFromSearch('?runtime=abc').runtime).toBeNull()
   })
 
   it('知らない値は既定に戻す（手で書き換えた URL・古い URL でも壊れない）', () => {
-    expect(readViewFromSearch('?kind=drama&sort=x&order=y&service=')).toEqual(DEFAULT_VIEW)
+    expect(readViewFromSearch('?kind=drama&sort=x&order=y&service=&runtime=999')).toEqual(DEFAULT_VIEW)
   })
 
   it('種類不明（none）は選べる', () => {
@@ -26,8 +39,12 @@ describe('viewToSearch', () => {
   })
 
   it('読み取りと往復できる', () => {
-    const view = { service: 'ディズニープラス', kind: 'movie', query: 'a&b=c', sort: 'name', order: 'clip' }
+    const view = { service: 'ディズニープラス', kind: 'movie', query: 'a&b=c', sort: 'name', order: 'clip', runtime: 90 }
     expect(readViewFromSearch(viewToSearch(view))).toEqual(view)
+  })
+
+  it('上映時間の上限は ?runtime= に書く', () => {
+    expect(viewToSearch({ ...DEFAULT_VIEW, runtime: 150 })).toBe('?runtime=150')
   })
 
   it('検索語の前後の空白だけなら書かない', () => {
