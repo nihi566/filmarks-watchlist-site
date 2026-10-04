@@ -45,6 +45,7 @@ import { useRetryFocus } from '../useRetryFocus.js'
 import { matchesKeyword, normalizeForSearch } from '../searchText.js'
 import { KIND_FILTERS, isKind, kindLabel, matchesKindFilter } from '../records/kinds.js'
 import { readViewFromSearch, viewToSearch, withSearch } from '../watchlistUrl.js'
+import { RUNTIME_LIMITS, filterTabsByRuntime, runtimeLabel } from '../runtimeFilter.js'
 
 const UNAVAILABLE = '未配信'
 const SORTS = [
@@ -312,6 +313,9 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   const [serviceMenuAnchor, setServiceMenuAnchor] = useState(null)
   const [kindFilter, setKindFilter] = useState(initialView.kind)
   const [kindMenuAnchor, setKindMenuAnchor] = useState(null)
+  // 上映時間の上限（分）。null は指定なし
+  const [runtimeLimit, setRuntimeLimit] = useState(initialView.runtime)
+  const [runtimeMenuAnchor, setRuntimeMenuAnchor] = useState(null)
   const [sortMenuAnchor, setSortMenuAnchor] = useState(null)
   // 「見た」に記録しようとしている作品と、記録後の通知（元に戻す用の作品を持つ）
   const [watchTarget, setWatchTarget] = useState(null)
@@ -355,16 +359,28 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
   // 「見た」の作品は一覧・検索・件数のすべてから外す（記録の読込前・失敗時は全件）
   const watched = records.file?.records
   const unwatchedTabs = useMemo(() => (data ? excludeWatched(data.tabs, watched) : []), [data, watched])
-  // 種類の絞り込みは件数・サービスの一覧を含むすべてに効かせる
-  const visibleTabs = useMemo(() => filterTabsByKind(unwatchedTabs, kindFilter), [unwatchedTabs, kindFilter])
+  // 種類・上映時間の絞り込みは件数・サービスの一覧を含むすべてに効かせる
+  const runtimeTabs = useMemo(() => filterTabsByRuntime(unwatchedTabs, runtimeLimit), [unwatchedTabs, runtimeLimit])
+  const kindTabs = useMemo(() => filterTabsByKind(unwatchedTabs, kindFilter), [unwatchedTabs, kindFilter])
+  const visibleTabs = useMemo(() => filterTabsByRuntime(kindTabs, runtimeLimit), [kindTabs, runtimeLimit])
+  // 各選択肢の件数は、もう一方の絞り込みを掛けたうえでの件数（選んだ後の「すべて」の件数と一致させる）
   const kindOptions = useMemo(() => {
     // 種類不明で絞り込んだまま最後の 1 件を「見た」にしても、選択中の項目としては残す
     const hasUnknown = kindFilter === 'none' || unwatchedTabs.some((tab) => tab.movies.some((movie) => !isKind(movie.kind)))
     return [...KIND_MENU, ...(hasUnknown ? [UNKNOWN_KIND] : [])].map((option) => ({
       ...option,
-      count: countUniqueMovies(filterTabsByKind(unwatchedTabs, option.value)),
+      count: countUniqueMovies(filterTabsByKind(runtimeTabs, option.value)),
     }))
-  }, [unwatchedTabs, kindFilter])
+  }, [unwatchedTabs, runtimeTabs, kindFilter])
+  const runtimeOptions = useMemo(
+    () =>
+      [null, ...RUNTIME_LIMITS].map((limit) => ({
+        value: limit,
+        label: limit == null ? '指定なし' : runtimeLabel(limit),
+        count: countUniqueMovies(filterTabsByRuntime(kindTabs, limit)),
+      })),
+    [kindTabs],
+  )
   const uniqueCount = useMemo(() => countUniqueMovies(visibleTabs), [visibleTabs])
   const allGroups = useMemo(() => sortGroups(visibleTabs, sortKey), [visibleTabs, sortKey])
 
@@ -382,14 +398,21 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
 
   // 見え方が変わるたびに URL のクエリを書き換える（履歴は増やさない）
   useEffect(() => {
-    const search = viewToSearch({ service: serviceFilter, kind: kindFilter, query, sort: sortKey, order: movieOrder })
+    const search = viewToSearch({
+      service: serviceFilter,
+      kind: kindFilter,
+      query,
+      sort: sortKey,
+      order: movieOrder,
+      runtime: runtimeLimit,
+    })
     if (search === window.location.search) return
     try {
       window.history.replaceState(window.history.state, '', withSearch(window.location, search))
     } catch {
       // Safari は短時間に replaceState を呼びすぎると SecurityError を投げる。URL が古いままになるだけなので一覧は止めない
     }
-  }, [serviceFilter, kindFilter, query, sortKey, movieOrder])
+  }, [serviceFilter, kindFilter, query, sortKey, movieOrder, runtimeLimit])
 
   const groups = useMemo(() => {
     const base = serviceFilter ? allGroups.filter((tab) => tab.name === serviceFilter) : allGroups
@@ -425,11 +448,18 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
     setKindMenuAnchor(null)
   }
 
+  const selectRuntime = (value) => {
+    setRuntimeLimit(value)
+    setRuntimeMenuAnchor(null)
+  }
+
   const kindName = kindFilter === 'all' ? '' : kindOptions.find((option) => option.value === kindFilter)?.label
+  const runtimeName = runtimeLimit == null ? '' : runtimeLabel(runtimeLimit)
+  const filterNames = [serviceFilter, kindName, runtimeName].filter(Boolean)
   const announcement = searching
     ? `「${keyword}」に一致する作品 ${matchCount}件`
-    : serviceFilter || kindName
-      ? `${[serviceFilter, kindName].filter(Boolean).join('・')} ${matchCount}件`
+    : filterNames.length > 0
+      ? `${filterNames.join('・')} ${matchCount}件`
       : ''
 
   const startWatch = (movie, group) => {
@@ -545,6 +575,16 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
               {kindFilter === 'all' ? '種類別' : kindName}
             </FilterButton>
             <FilterButton
+              selected={runtimeLimit != null}
+              endIcon={<KeyboardArrowDownIcon />}
+              aria-haspopup="menu"
+              aria-controls={runtimeMenuAnchor ? 'runtime-menu' : undefined}
+              aria-expanded={runtimeMenuAnchor ? 'true' : undefined}
+              onClick={(event) => setRuntimeMenuAnchor(event.currentTarget)}
+            >
+              {runtimeLimit == null ? '上映時間' : runtimeName}
+            </FilterButton>
+            <FilterButton
               endIcon={<KeyboardArrowDownIcon />}
               aria-haspopup="menu"
               aria-controls={sortMenuAnchor ? 'sort-menu' : undefined}
@@ -578,6 +618,27 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
             {kindOptions.map((option) => (
               <MenuItem key={option.value} selected={option.value === kindFilter} onClick={() => selectKind(option.value)}>
                 <ListItemIcon>{option.value === kindFilter && <CheckIcon fontSize="small" />}</ListItemIcon>
+                <ListItemText primary={option.label} />
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                  {option.count}件
+                </Typography>
+              </MenuItem>
+            ))}
+          </Menu>
+
+          <Menu
+            id="runtime-menu"
+            anchorEl={runtimeMenuAnchor}
+            open={Boolean(runtimeMenuAnchor)}
+            onClose={() => setRuntimeMenuAnchor(null)}
+          >
+            {runtimeOptions.map((option) => (
+              <MenuItem
+                key={option.label}
+                selected={option.value === runtimeLimit}
+                onClick={() => selectRuntime(option.value)}
+              >
+                <ListItemIcon>{option.value === runtimeLimit && <CheckIcon fontSize="small" />}</ListItemIcon>
                 <ListItemText primary={option.label} />
                 <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
                   {option.count}件
