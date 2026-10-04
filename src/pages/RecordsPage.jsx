@@ -283,6 +283,19 @@ export default function RecordsPage({ records }) {
           最新の視聴記録を読み込めませんでした。{recordsErrorMessage(records.error)}
         </Alert>
       )}
+      {/* トークンが無いと「作品を追加」と各行の ︙ が出ないので、理由と設定への導線を出す */}
+      {!records.canWrite && (
+        <Alert
+          severity="info"
+          action={
+            <Button color="inherit" size="small" href="#/settings">
+              設定を開く
+            </Button>
+          }
+        >
+          記録の追加・編集には、設定で GitHub トークンを保存してください。
+        </Alert>
+      )}
 
       <Box role="group" aria-label="種類で絞り込む" sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         {/* 未分類で絞り込んだまま最後の 1 件を戻しても、選択中のボタンとしては残す */}
@@ -373,9 +386,11 @@ export default function RecordsPage({ records }) {
         {month.days.length === 0 ? (
           <Box sx={{ py: 4, px: 2, textAlign: 'center' }}>
             <Typography color="text.secondary" sx={{ mb: 1.5 }}>
-              {kindFilter === 'all'
-                ? 'この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は「作品を追加」から記録できます。'
-                : 'この月に、この種類の視聴記録はありません。'}
+              {kindFilter !== 'all'
+                ? 'この月に、この種類の視聴記録はありません。'
+                : records.canWrite
+                  ? 'この月の視聴記録はまだありません。ウォッチリストの「見た」か、ウォッチリストに無い作品（テレビアニメなど）は「作品を追加」から記録できます。'
+                  : 'この月の視聴記録はまだありません。'}
             </Typography>
             <Button variant="outlined" href="#/">
               ウォッチリストへ
