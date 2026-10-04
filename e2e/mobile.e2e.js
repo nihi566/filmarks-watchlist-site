@@ -30,6 +30,23 @@ test.describe('スマホ幅', () => {
     test(`${hash} で横スクロールが出ない`, ({ page }) => expectNoHorizontalScroll(page, hash))
   }
 
+  // 見出しは画面の上に固定している。見出しのボタンへフォーカスが戻っても（メニューを閉じたとき）ページが跳ねないこと
+  test('スクロールした状態でメニューを開いて閉じても位置が変わらない', async ({ page, github }) => {
+    for (let i = 0; i < 40; i += 1) github.file.records[`manual-${i}`] = record(`作品 ${i}`, todayLocal())
+    await page.goto('./#/records')
+    await expect(page.getByRole('link', { name: /^作品 39/ })).toBeVisible()
+    await page.evaluate(() => window.scrollTo(0, 1200))
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(1200)
+    // Playwright の click() は押す前にページを先頭までスクロールするので、DOM でフォーカスしてから押す
+    await page.getByRole('button', { name: 'メニューを開く' }).evaluate((button) => button.focus())
+    expect(await page.evaluate(() => window.scrollY)).toBe(1200)
+    await page.getByRole('button', { name: 'メニューを開く' }).evaluate((button) => button.click())
+    await expect(page.getByRole('link', { name: 'ウォッチリスト' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('button', { name: 'メニューを開く' })).toBeFocused()
+    expect(await page.evaluate(() => window.scrollY)).toBe(1200)
+  })
+
   test.describe('トークン未設定', () => {
     test.use({ token: '' })
 

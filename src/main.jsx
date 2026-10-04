@@ -43,8 +43,9 @@ const theme = createTheme({
     },
     // 区切りの無い長い英数字（URL や英題）が画面の横にはみ出さないよう、はみ出すときだけ途中で折り返す
     // 段落の最後の 1 文字だけが次の行に残る（「ありませ / ん」）のも避け、日本語は文節の切れ目で改行する（「一 / 致」「オンデマ / ンド」を避ける）
-    // 固定の見出し（56px / 600px 以上は 64px）の下に、フォーカスやジャンプ先が隠れないようにする
-    MuiCssBaseline: { styleOverrides: { html: { scrollPaddingTop: 56, '@media (min-width: 600px)': { scrollPaddingTop: 64 } }, body: { overflowWrap: 'break-word', textWrap: 'pretty', wordBreak: 'auto-phrase' } } },
+    // 固定の見出し（56px / 600px 以上は 64px）の下に、キーボードで移ったフォーカスが隠れないようにする。
+    // html の scroll-padding にすると見出しの中のボタン自体まで「隠れている」扱いになり、フォーカスのたびに画面が跳ねるので、本文（main）の要素にだけ付ける
+    MuiCssBaseline: { styleOverrides: { 'main :is(a, button, input, textarea, select, [tabindex])': { scrollMarginTop: 56, '@media (min-width: 600px)': { scrollMarginTop: 64 } }, body: { overflowWrap: 'break-word', textWrap: 'pretty', wordBreak: 'auto-phrase' } } },
   },
 })
 

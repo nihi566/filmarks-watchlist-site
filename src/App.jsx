@@ -130,18 +130,20 @@ export default function App() {
 
       <AppMenu open={menuOpen} onClose={() => setMenuOpen(false)} currentPage={page} />
 
-      {page === 'watchlist' && <WatchlistPage searchRef={searchRef} records={records} watchlist={watchlist} />}
-      {page === 'records' && <RecordsPage records={records} />}
-      {page === 'recommend' && <RecommendPage records={records} watchlist={watchlist} llmSettings={llmSettings} />}
-      {page === 'settings' && (
-        <SettingsPage
-          token={token}
-          onSaveToken={saveToken}
-          onClearToken={removeToken}
-          llmSettings={llmSettings}
-          onSaveLlmSettings={saveLlmSettings}
-        />
-      )}
+      <Box component="main">
+        {page === 'watchlist' && <WatchlistPage searchRef={searchRef} records={records} watchlist={watchlist} />}
+        {page === 'records' && <RecordsPage records={records} />}
+        {page === 'recommend' && <RecommendPage records={records} watchlist={watchlist} llmSettings={llmSettings} />}
+        {page === 'settings' && (
+          <SettingsPage
+            token={token}
+            onSaveToken={saveToken}
+            onClearToken={removeToken}
+            llmSettings={llmSettings}
+            onSaveLlmSettings={saveLlmSettings}
+          />
+        )}
+      </Box>
     </Box>
   )
 }

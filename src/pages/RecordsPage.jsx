@@ -202,6 +202,8 @@ function RecordRow({ item, canEdit, onOpenMenu, dateText }) {
   return (
     <ListItem
       disablePadding
+      // 日付の見出し（36px）も画面の上に固定されるので、キーボードで移ったフォーカスがその下に隠れないよう、見出しの分も空ける
+      sx={{ '& :is(a, button)': { scrollMarginTop: { xs: 92, sm: 100 } } }}
       secondaryAction={
         canEdit && (
           <IconButton
