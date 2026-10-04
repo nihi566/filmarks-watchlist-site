@@ -1,7 +1,9 @@
 // ウォッチリストの作品の製作国・ジャンルを Filmarks の作品ページから取り、public/movie-meta.json に保存する。
 // サイトはこれで作品の種類（アニメ・邦画・洋画）を決める。watchlist.json は scraper が作り直すので別のファイルに持つ。
 // 使い方: npm run meta（まだ取っていない作品だけを 1 秒に 1 件ずつ取りに行く。--all で全件取り直す）
+import { realpathSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 
 const WATCHLIST = new URL('../public/watchlist.json', import.meta.url)
 const META = new URL('../public/movie-meta.json', import.meta.url)
@@ -59,4 +61,16 @@ async function main() {
   if (failed) process.exitCode = 1
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main()
+// node にこのファイルを直接渡して実行したときだけ true（テストから import しただけなら false）。
+// URL 文字列どうしで比べると、Windows のパス（C:\...）や空白・日本語を含むパス（URL 側だけ % エンコードされる）で一致しないため、
+// 実際のファイルパスに直してから比べる
+export function isMainModule(moduleUrl, argvPath) {
+  if (!argvPath) return false
+  try {
+    return realpathSync(argvPath) === realpathSync(fileURLToPath(moduleUrl))
+  } catch {
+    return false
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) await main()
