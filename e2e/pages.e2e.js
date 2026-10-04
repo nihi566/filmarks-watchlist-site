@@ -84,6 +84,34 @@ test.describe('視聴記録', () => {
     await expect(page.getByRole('link', { name: /^PERFECT BLUE/ })).toBeVisible()
   })
 
+  test('話数・1 話の長さが空欄のアニメ記録を編集しても、空欄のまま保存される', async ({ page, github, errors }) => {
+    github.file.records = {
+      'manual-a': record('話数不明のアニメ', todayLocal(), { kind: 'anime', minutes: null, episodes: null, episode_minutes: 24 }),
+      'manual-b': record('長さ不明のアニメ', todayLocal(), { kind: 'anime', minutes: null, episodes: 12, episode_minutes: null }),
+    }
+    await page.goto('./#/records')
+    for (const [id, title] of [
+      ['manual-a', '話数不明のアニメ'],
+      ['manual-b', '長さ不明のアニメ'],
+    ]) {
+      const before = github.file.records[id]
+      await page.getByRole('button', { name: `「${title}」の操作` }).click()
+      await page.getByRole('menuitem', { name: '記録を編集' }).click()
+      const edit = page.getByRole('dialog', { name: '記録を編集' })
+      await expect(edit.getByLabel('見た話数')).toHaveValue(before.episodes == null ? '' : String(before.episodes))
+      await expect(edit.getByLabel('1話の長さ')).toHaveValue(before.episode_minutes == null ? '' : String(before.episode_minutes))
+      await expect(edit.getByText('視聴時間: 不明')).toBeVisible()
+      await edit.getByRole('button', { name: '保存' }).click()
+      await expect(page.getByText(`「${title}」の記録を更新しました`)).toBeVisible()
+      expect(github.file.records[id]).toMatchObject({
+        minutes: null,
+        episodes: before.episodes,
+        episode_minutes: before.episode_minutes,
+      })
+    }
+    expect(errors).toEqual([])
+  })
+
   test('見たいに戻すと、ウォッチリストに戻っている', async ({ page, github }) => {
     github.file.records = { '13580': record('PERFECT BLUE', todayLocal(), { kind: 'anime', minutes: 81 }) }
     await page.goto('./#/records')

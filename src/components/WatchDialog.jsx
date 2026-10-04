@@ -16,7 +16,7 @@ import FormControl from '@mui/material/FormControl'
 import FormLabel from '@mui/material/FormLabel'
 import FormHelperText from '@mui/material/FormHelperText'
 import { recordsErrorMessage } from '../records/github.js'
-import { animeMinutes, isValidDate, todayLocal } from '../records/records.js'
+import { animeMinutes, initialEpisodeFields, isValidDate, todayLocal } from '../records/records.js'
 import { KINDS, RATING_LABELS } from '../records/kinds.js'
 import { formatMinutes } from '../records/summary.js'
 
@@ -65,9 +65,12 @@ export default function WatchDialog({
   const [hoverRating, setHoverRating] = useState(-1)
   const [watchedOn, setWatchedOn] = useState(initial?.watched_on ?? today)
   const [minutesText, setMinutesText] = useState(numberText(baseMinutes))
-  // テレビアニメは 1 クール（12 話・1 話 24 分）を初期値にする。上映時間が分かる劇場アニメは 1 話ぶんとして扱う
-  const [episodesText, setEpisodesText] = useState(numberText(initial?.episodes ?? (baseMinutes != null ? 1 : 12)))
-  const [episodeMinutesText, setEpisodeMinutesText] = useState(numberText(initial?.episode_minutes ?? baseMinutes ?? 24))
+  // テレビアニメは 1 クール（12 話・1 話 24 分）を初期値にする。上映時間が分かる劇場アニメは 1 話ぶんとして扱う。
+  // アニメの記録の編集は記録の値のまま（空欄は空欄）
+  const [episodesText, setEpisodesText] = useState(() => numberText(initialEpisodeFields(initial, baseMinutes).episodes))
+  const [episodeMinutesText, setEpisodeMinutesText] = useState(() =>
+    numberText(initialEpisodeFields(initial, baseMinutes).episode_minutes),
+  )
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
