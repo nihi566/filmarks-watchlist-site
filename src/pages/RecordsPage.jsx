@@ -267,6 +267,7 @@ export default function RecordsPage({ records }) {
   const returnFocus = useRef([])
   const addButton = useRef(null)
   const searchInput = useRef(null)
+  const previousButton = useRef(null)
   // 再試行で消えた Alert の代わりに、成功したら「追加」へ、また失敗したら新しい「再試行」へ戻す
   const recordsRetry = useRetryFocus(records.status, () => addButton.current?.focus())
   const undoButton = useRef(null)
@@ -314,6 +315,15 @@ export default function RecordsPage({ records }) {
   const canEdit = records.canWrite && records.status === 'ready'
 
   const move = (delta) => setPeriod((current) => addMonths(current.year, current.month, delta))
+  // 押した「今月へ」は消えるので、フォーカスは月の切り替えへ移す
+  const goThisMonth = () => {
+    setPeriod({ year: thisYear, month: thisMonth })
+    previousButton.current?.focus()
+  }
+  const clearSearch = () => {
+    setSearchText('')
+    searchInput.current?.focus()
+  }
   const openMenu = (anchor, item) => setMenu({ anchor, item, open: true })
 
   // ウォッチリスト由来の作品は「見たい」に戻し、手で追加した作品は記録を消す（どちらも元に戻せる）
@@ -456,6 +466,13 @@ export default function RecordsPage({ records }) {
               </Typography>
             )}
           </Box>
+          {results.length === 0 && (
+            <Box sx={{ py: 3, px: 2, textAlign: 'center' }}>
+              <Button variant="outlined" size="small" onClick={clearSearch}>
+                検索をクリア
+              </Button>
+            </Box>
+          )}
           {results.length > 0 && (
             <List disablePadding>
               {results.map((item) => (
@@ -473,7 +490,7 @@ export default function RecordsPage({ records }) {
       ) : (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-            <IconButton aria-label="前の月" onClick={() => move(-1)}>
+            <IconButton ref={previousButton} aria-label="前の月" onClick={() => move(-1)}>
               <ChevronLeftIcon />
             </IconButton>
             <Typography component="h2" aria-live="polite" sx={{ fontWeight: 800, fontSize: 18, minWidth: 120, textAlign: 'center' }}>
@@ -485,9 +502,17 @@ export default function RecordsPage({ records }) {
           </Box>
 
           <Paper variant="outlined" component="section" aria-label={`${period.year}年${period.month}月のまとめ`} sx={{ borderRadius: 3, p: 2 }}>
-            <Typography sx={{ fontWeight: 700, mb: 1 }}>
-              {period.year}年{period.month}月のまとめ
-            </Typography>
+            {/* 前の月・次の月の並びに置くと出し入れで矢印の位置がずれ、続けて押すと押し間違えるので、ここに置く */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, minHeight: 30 }}>
+              <Typography sx={{ fontWeight: 700, flexGrow: 1 }}>
+                {period.year}年{period.month}月のまとめ
+              </Typography>
+              {!isThisMonth && (
+                <Button size="small" onClick={goThisMonth} sx={{ whiteSpace: 'nowrap' }}>
+                  今月へ
+                </Button>
+              )}
+            </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
               <Stat label="見た作品" value={month.count} unit="本" />
               <Stat label="視聴時間" value={formatMinutes(month.minutes)} />

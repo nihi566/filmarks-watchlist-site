@@ -1,5 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Box from '@mui/material/Box'
+import Dialog from '@mui/material/Dialog'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogActions from '@mui/material/DialogActions'
 import Typography from '@mui/material/Typography'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
@@ -158,6 +163,9 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
   const [input, setInput] = useState('')
   const [result, setResult] = useState(null)
   const [checking, setChecking] = useState(false)
+  // トークンは GitHub で発行し直さないと戻せないので、削除は確認してから
+  const [confirmingClear, setConfirmingClear] = useState(false)
+  const tokenInput = useRef(null)
 
   const save = (event) => {
     event.preventDefault()
@@ -193,6 +201,7 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
   }
 
   const clear = () => {
+    setConfirmingClear(false)
     if (onClearToken()) setResult({ severity: 'info', text: 'トークンを削除しました。記録の閲覧はできますが、保存はできません。' })
     else setResult({ severity: 'error', text: 'トークンを削除できませんでした。' })
   }
@@ -216,7 +225,7 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
             <Button variant="contained" disableElevation onClick={check} disabled={checking}>
               {checking ? '確認中…' : '接続を確認'}
             </Button>
-            <Button variant="outlined" color="error" onClick={clear}>
+            <Button variant="outlined" color="error" onClick={() => setConfirmingClear(true)}>
               削除
             </Button>
           </Box>
@@ -228,6 +237,7 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
               size="small"
               fullWidth
               autoComplete="off"
+              inputRef={tokenInput}
               value={input}
               onChange={(event) => setInput(event.target.value)}
             />
@@ -243,6 +253,32 @@ export default function SettingsPage({ token, onSaveToken, onClearToken, llmSett
           </Alert>
         )}
       </Paper>
+
+      <Dialog
+        open={confirmingClear}
+        onClose={() => setConfirmingClear(false)}
+        maxWidth="xs"
+        slotProps={{
+          // 削除すると「削除」ボタンごと消えるので、閉じた後は入力欄へ移す（キャンセルなら「削除」へ戻る）
+          transition: { onExited: () => !token && tokenInput.current?.focus() },
+        }}
+      >
+        <DialogTitle>トークンを削除しますか？</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            この端末から GitHub トークンを消します。記録の保存には、GitHub でトークンを発行し直して入れ直す必要があります。
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          {/* 開いた直後の Enter で消さないよう、初期フォーカスはキャンセルに置く */}
+          <Button autoFocus onClick={() => setConfirmingClear(false)}>
+            キャンセル
+          </Button>
+          <Button color="error" onClick={clear}>
+            削除する
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Paper variant="outlined" sx={{ borderRadius: 3, p: 2 }}>
         <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16, mb: 1 }}>
