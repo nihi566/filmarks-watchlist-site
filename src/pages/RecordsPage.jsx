@@ -38,6 +38,8 @@ import {
   TOP_RATED_MIN,
   addMonths,
   formatMinutes,
+  lastRecordedMonth,
+  recordYears,
   searchRecords,
   summarizeMonth,
   summarizeYear,
@@ -331,6 +333,8 @@ export default function RecordsPage({ records }) {
     [shown, previous.year, previous.month],
   )
   const year = useMemo(() => summarizeYear(shown, period.year), [shown, period.year])
+  // 年の切り替えの選択肢は、種類の絞り込みに関係なく記録のある年
+  const years = useMemo(() => recordYears(entries), [entries])
   const keyword = searchText.trim()
   const searching = keyword !== ''
   const results = useMemo(() => searchRecords(shown, keyword), [shown, keyword])
@@ -343,6 +347,11 @@ export default function RecordsPage({ records }) {
   const goThisMonth = () => {
     setPeriod({ year: thisYear, month: thisMonth })
     previousButton.current?.focus()
+  }
+  // 選んだ年の、記録のある最後の月へ移る（今の種類の絞り込みで記録が無ければ 1 月。今年は今月より先へ行かない）
+  const goYear = (selected) => {
+    const last = lastRecordedMonth(shown, selected) ?? 1
+    setPeriod({ year: selected, month: selected === thisYear ? Math.min(last, thisMonth) : last })
   }
   const clearSearch = () => {
     setSearchText('')
@@ -560,7 +569,34 @@ export default function RecordsPage({ records }) {
           </Paper>
 
           <Paper variant="outlined" component="section" aria-label={`${period.year}年のまとめ`} sx={{ borderRadius: 3, p: 2 }}>
-            <Typography sx={{ fontWeight: 700, mb: 1 }}>{period.year}年のまとめ</Typography>
+            {/* 年を選ぶと、その年のまとめへ直接移る（月送りで何年も遡らなくて済む） */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <TextField
+                select
+                size="small"
+                variant="standard"
+                value={period.year}
+                onChange={(event) => goYear(Number(event.target.value))}
+                slotProps={{
+                  select: { native: true },
+                  htmlInput: { 'aria-label': '表示する年' },
+                  input: { sx: { fontWeight: 700 } },
+                }}
+              >
+                {/* 月送りで記録の無い年を表示している間は、その年を選べない項目として見せるだけにする */}
+                {!years.includes(period.year) && (
+                  <option value={period.year} disabled>
+                    {period.year}年（記録なし）
+                  </option>
+                )}
+                {years.map((item) => (
+                  <option key={item} value={item}>
+                    {item}年
+                  </option>
+                ))}
+              </TextField>
+              <Typography sx={{ fontWeight: 700 }}>のまとめ</Typography>
+            </Box>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
               <Stat label="見た作品" value={year.count} unit="本" />
               <Stat label="視聴時間" value={formatMinutes(year.minutes)} />

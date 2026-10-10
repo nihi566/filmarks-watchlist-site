@@ -76,6 +76,20 @@ export function summarizeYear(records, year) {
   return { ...totals(items), kinds: countByKind(items), months, ...summarizeRatings(items) }
 }
 
+// 記録のある年（年の切り替えの選択肢）。新しい年から
+export function recordYears(records) {
+  const years = new Set(entriesOf(records).map((item) => Number(item.watched_on.slice(0, 4))))
+  return [...years].sort((a, b) => b - a)
+}
+
+// その年で記録のある最後の月。無ければ null
+export function lastRecordedMonth(records, year) {
+  const months = entriesOf(records)
+    .filter((item) => item.watched_on.startsWith(prefixOf(year)))
+    .map((item) => Number(item.watched_on.slice(5, 7)))
+  return months.length > 0 ? Math.max(...months) : null
+}
+
 // 年のまとめに出す「★の高い作品」の基準と件数
 export const TOP_RATED_MIN = 4
 export const TOP_RATED_LIMIT = 5

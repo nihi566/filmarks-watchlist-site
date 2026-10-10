@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { filterRecordsByKind } from './kinds.js'
-import { addMonths, formatMinutes, searchRecords, summarizeMonth, summarizeYear, weekdayLabel } from './summary.js'
+import {
+  addMonths,
+  formatMinutes,
+  lastRecordedMonth,
+  recordYears,
+  searchRecords,
+  summarizeMonth,
+  summarizeYear,
+  weekdayLabel,
+} from './summary.js'
 
 const records = {
   1: { title: 'B作品', image: '', watched_on: '2026-09-26', minutes: 150, updated_at: '' },
@@ -179,5 +188,28 @@ describe('searchRecords', () => {
   it('検索語が空白だけ・記録が無いときは空', () => {
     expect(searchRecords(library, '  ')).toEqual([])
     expect(searchRecords(null, 'きみ')).toEqual([])
+  })
+})
+
+describe('recordYears', () => {
+  it('記録のある年だけを、新しい年から重複なく返す', () => {
+    expect(recordYears(records)).toEqual([2026, 2025])
+  })
+
+  it('記録が無いときは空', () => {
+    expect(recordYears(null)).toEqual([])
+    expect(recordYears({})).toEqual([])
+  })
+})
+
+describe('lastRecordedMonth', () => {
+  it('その年で記録のある最後の月を返す', () => {
+    expect(lastRecordedMonth(records, 2026)).toBe(9)
+    expect(lastRecordedMonth(records, 2025)).toBe(12)
+  })
+
+  it('その年に記録が無いときは null', () => {
+    expect(lastRecordedMonth(records, 2024)).toBeNull()
+    expect(lastRecordedMonth(null, 2026)).toBeNull()
   })
 })
