@@ -76,6 +76,22 @@ export function summarizeYear(records, year) {
   return { ...totals(items), kinds: countByKind(items), months, ...summarizeRatings(items) }
 }
 
+// 年のまとめに出す前年との比較（本数・視聴時間）。前年に記録が無ければ空文字。
+// 種類で絞り込むときは、両方とも絞り込んだ records から作った集計を渡す
+export function yearComparisonText(current, previous) {
+  if (previous.count === 0) return ''
+  const countDiff = current.count - previous.count
+  const minutesDiff = current.minutes - previous.minutes
+  if (countDiff === 0 && minutesDiff === 0) return '前年と同じ本数・視聴時間でした'
+  const countPart =
+    countDiff === 0 ? '前年と同じ本数で' : countDiff > 0 ? `前年より ${countDiff} 本多く` : `前年より ${-countDiff} 本少なく`
+  const minutesPart =
+    minutesDiff === 0
+      ? '視聴時間は前年と同じでした'
+      : `視聴時間は ${formatMinutes(Math.abs(minutesDiff))} ${minutesDiff > 0 ? '長く' : '短く'}なりました`
+  return `${countPart}、${minutesPart}`
+}
+
 // 記録のある年（年の切り替えの選択肢）。新しい年から
 export function recordYears(records) {
   const years = new Set(entriesOf(records).map((item) => Number(item.watched_on.slice(0, 4))))
