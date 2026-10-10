@@ -44,6 +44,7 @@ import {
   summarizeMonth,
   summarizeYear,
   weekdayLabel,
+  yearComparisonText,
 } from '../records/summary.js'
 import { filmarksMovieUrl, filmarksSearchUrl } from '../filmarks.js'
 import { focusFirst } from '../focusFirst.js'
@@ -333,6 +334,8 @@ export default function RecordsPage({ records }) {
     [shown, previous.year, previous.month],
   )
   const year = useMemo(() => summarizeYear(shown, period.year), [shown, period.year])
+  const previousYear = useMemo(() => summarizeYear(shown, period.year - 1), [shown, period.year])
+  const yearComparison = yearComparisonText(year, previousYear)
   // 年の切り替えの選択肢は、種類の絞り込みに関係なく記録のある年
   const years = useMemo(() => recordYears(entries), [entries])
   const keyword = searchText.trim()
@@ -601,6 +604,11 @@ export default function RecordsPage({ records }) {
               <Stat label="見た作品" value={year.count} unit="本" />
               <Stat label="視聴時間" value={formatMinutes(year.minutes)} />
             </Box>
+            {yearComparison && (
+              <Typography variant="body2" sx={{ mt: 1, fontWeight: 700, color: year.count >= previousYear.count ? 'success.main' : 'text.secondary' }}>
+                {yearComparison}
+              </Typography>
+            )}
             {year.kinds.length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 <KindsText kinds={year.kinds} />

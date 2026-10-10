@@ -9,6 +9,7 @@ import {
   summarizeMonth,
   summarizeYear,
   weekdayLabel,
+  yearComparisonText,
 } from './summary.js'
 
 const records = {
@@ -211,5 +212,44 @@ describe('lastRecordedMonth', () => {
   it('その年に記録が無いときは null', () => {
     expect(lastRecordedMonth(records, 2024)).toBeNull()
     expect(lastRecordedMonth(null, 2026)).toBeNull()
+  })
+})
+
+describe('yearComparisonText', () => {
+  it('前年より本数・時間が多いときは差を出す', () => {
+    expect(yearComparisonText({ count: 15, minutes: 1500 }, { count: 12, minutes: 1290 })).toBe(
+      '前年より 3 本多く、視聴時間は 3時間30分 長くなりました',
+    )
+  })
+
+  it('前年より少ないときは少なめと出す', () => {
+    expect(yearComparisonText({ count: 10, minutes: 600 }, { count: 12, minutes: 720 })).toBe(
+      '前年より 2 本少なく、視聴時間は 2時間 短くなりました',
+    )
+  })
+
+  it('本数だけ同じ・時間だけ同じ・両方同じを言い分ける', () => {
+    expect(yearComparisonText({ count: 12, minutes: 700 }, { count: 12, minutes: 720 })).toBe('前年と同じ本数で、視聴時間は 20分 短くなりました')
+    expect(yearComparisonText({ count: 13, minutes: 720 }, { count: 12, minutes: 720 })).toBe('前年より 1 本多く、視聴時間は前年と同じでした')
+    expect(yearComparisonText({ count: 12, minutes: 720 }, { count: 12, minutes: 720 })).toBe('前年と同じ本数・視聴時間でした')
+  })
+
+  it('前年に記録が無ければ出さない', () => {
+    expect(yearComparisonText({ count: 5, minutes: 300 }, { count: 0, minutes: 0 })).toBe('')
+  })
+
+  it('種類で絞り込んだ記録どうしで比べられる', () => {
+    const records = {
+      1: { title: 'A', watched_on: '2026-03-01', minutes: 100, kind: 'anime' },
+      2: { title: 'B', watched_on: '2026-04-01', minutes: 120, kind: 'japanese' },
+      3: { title: 'C', watched_on: '2025-05-01', minutes: 60, kind: 'japanese' },
+      4: { title: 'D', watched_on: '2025-06-01', minutes: 90, kind: 'japanese' },
+    }
+    const anime = filterRecordsByKind(records, 'anime')
+    expect(yearComparisonText(summarizeYear(anime, 2026), summarizeYear(anime, 2025))).toBe('')
+    const japanese = filterRecordsByKind(records, 'japanese')
+    expect(yearComparisonText(summarizeYear(japanese, 2026), summarizeYear(japanese, 2025))).toBe(
+      '前年より 1 本少なく、視聴時間は 30分 短くなりました',
+    )
   })
 })
