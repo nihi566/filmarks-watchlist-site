@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "meta": "node scripts/update-movie-meta.js",
+    "meta:check": "node scripts/update-movie-meta.js --check",
     "test:e2e": "playwright test"
   },
   "dependencies": {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { collectMovieMeta, isMainModule, parseMovieMeta } from './update-movie-meta.js'
+import { collectMovieMeta, findMissingMetaIds, isMainModule, parseMovieMeta } from './update-movie-meta.js'
 
 const SCRIPT_URL = new URL('./update-movie-meta.js', import.meta.url)
 const SCRIPT_PATH = fileURLToPath(SCRIPT_URL)
@@ -95,5 +95,53 @@ describe('node scripts/update-movie-meta.js で直接実行したとき', () => 
 
     expect(output).toContain('作品 0 件のうち 0 件を取得します')
     expect(JSON.parse(readFileSync(join(root, 'public', 'movie-meta.json'), 'utf8'))).toEqual({ movies: {} })
+  })
+
+  it('--check は種類情報に無い作品の ID を出して終了コード 1 で終わり、movie-meta.json を書き換えない', () => {
+    const script = join(root, 'scripts', 'update-movie-meta.js')
+    const metaPath = join(root, 'public', 'movie-meta.json')
+    writeFileSync(join(root, 'public', 'watchlist.json'), JSON.stringify({ tabs: [{ movies: [{ movie_id: 1 }, { movie_id: 2 }] }] }))
+    writeFileSync(metaPath, JSON.stringify({ movies: { 1: { countries: [], genres: [] } } }))
+    const env = { ...process.env, GITHUB_ACTIONS: '' }
+
+    let error
+    try {
+      execFileSync(process.execPath, [script, '--check'], { encoding: 'utf8', env })
+    } catch (err) {
+      error = err
+    }
+
+    expect(error?.status).toBe(1)
+    expect(error.stdout).toContain('public/movie-meta.json に無い作品が 1 件あります')
+    expect(error.stdout).toContain(': 2。')
+    expect(JSON.parse(readFileSync(metaPath, 'utf8'))).toEqual({ movies: { 1: { countries: [], genres: [] } } })
+  })
+
+  it('--check は不足が無ければ終了コード 0 で終わる', () => {
+    const script = join(root, 'scripts', 'update-movie-meta.js')
+    writeFileSync(join(root, 'public', 'watchlist.json'), JSON.stringify({ tabs: [{ movies: [{ movie_id: 1 }, { movie_id: 2 }] }] }))
+    writeFileSync(join(root, 'public', 'movie-meta.json'), JSON.stringify({ movies: { 1: {}, 2: {} } }))
+
+    const output = execFileSync(process.execPath, [script, '--check'], { encoding: 'utf8' })
+
+    expect(output).toContain('すべて public/movie-meta.json にあります')
+  })
+})
+
+describe('findMissingMetaIds', () => {
+  const watchlist = {
+    tabs: [
+      { movies: [{ movie_id: 1 }, { movie_id: 2 }] },
+      { movies: [{ movie_id: 2 }, { movie_id: 3 }] },
+    ],
+  }
+
+  it('種類情報に無いウォッチリストの作品 ID を重複なしで返す', () => {
+    expect(findMissingMetaIds(watchlist, { 1: { countries: [], genres: [] } })).toEqual(['2', '3'])
+  })
+
+  it('すべて揃っていれば空にする', () => {
+    const movies = { 1: {}, 2: {}, 3: {} }
+    expect(findMissingMetaIds(watchlist, movies)).toEqual([])
   })
 })
