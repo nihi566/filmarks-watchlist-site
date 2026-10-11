@@ -569,7 +569,8 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
       // 一覧に戻ってきた作品の「見た」ボタンへ戻す
       setFocusRequest([watchButtonSelector(movie.movie_id), ...returnFocus.current])
     } catch (err) {
-      setNotice({ severity: 'error', text: `元に戻せませんでした。${recordsErrorMessage(err)}` })
+      // 戻す対象を残して、通知の「再試行」から同じ変更を送り直せるようにする
+      setNotice({ severity: 'error', text: `元に戻せませんでした。${recordsErrorMessage(err)}`, undo: movie })
     }
   }
 
@@ -873,7 +874,7 @@ export default function WatchlistPage({ searchRef, records, watchlist }) {
                 // action を渡すと Alert の閉じるボタンが消えるので自分で置く（スマホで下の行を隠したままにしない）
                 <>
                   <Button ref={undoButton} color="inherit" size="small" onClick={() => undoWatch(notice.undo)}>
-                    元に戻す
+                    {notice.severity === 'error' ? '再試行' : '元に戻す'}
                   </Button>
                   <IconButton color="inherit" size="small" aria-label="閉じる" onClick={closeNotice}>
                     <CloseIcon fontSize="small" />

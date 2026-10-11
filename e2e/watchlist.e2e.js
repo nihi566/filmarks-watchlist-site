@@ -123,6 +123,27 @@ test.describe('ウォッチリスト', () => {
     expect(errors).toEqual([])
   })
 
+  test('元に戻すが失敗したら通知に「再試行」が出て、押すと戻せる', async ({ page, github }) => {
+    await page.goto('./')
+    await page.getByRole('button', { name: /^Hulu/ }).click()
+    await page.getByRole('button', { name: '「PERFECT BLUE」を見たに記録' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: '保存' }).click()
+    await expect(page.getByText('「PERFECT BLUE」を見たに記録しました')).toBeVisible()
+
+    github.failPut = 500
+    await page.getByRole('button', { name: '元に戻す' }).click()
+    const alert = page.getByRole('alert').filter({ hasText: '元に戻せませんでした' })
+    const retry = alert.getByRole('button', { name: '再試行' })
+    await expect(retry).toBeFocused()
+    expect(github.file.records['13580']).toBeDefined()
+
+    github.failPut = null
+    await retry.click()
+    await expect(page.getByText('「PERFECT BLUE」を見たいに戻しました')).toBeVisible()
+    await expect(page.getByRole('button', { name: '「PERFECT BLUE」を見たに記録' })).toBeFocused()
+    expect(github.file.records['13580']).toBeUndefined()
+  })
+
   test('見たにした後のフォーカスは「元に戻す」→ 閉じると同じグループの次の作品', async ({ page }) => {
     await page.goto('./')
     await page.getByRole('button', { name: /^Hulu/ }).click()
