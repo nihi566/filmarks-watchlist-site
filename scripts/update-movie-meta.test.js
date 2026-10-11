@@ -3,8 +3,8 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, describe, expect, it } from 'vitest'
-import { isMainModule, parseMovieMeta } from './update-movie-meta.js'
+import { afterAll, describe, expect, it, vi } from 'vitest'
+import { collectMovieMeta, isMainModule, parseMovieMeta } from './update-movie-meta.js'
 
 const SCRIPT_URL = new URL('./update-movie-meta.js', import.meta.url)
 const SCRIPT_PATH = fileURLToPath(SCRIPT_URL)
@@ -23,6 +23,48 @@ describe('parseMovieMeta', () => {
 
   it('見出しが無ければ空の一覧にする', () => {
     expect(parseMovieMeta('<html></html>')).toEqual({ countries: [], genres: [] })
+  })
+})
+
+describe('collectMovieMeta', () => {
+  const previous = {
+    1: { countries: ['日本'], genres: ['アニメ'] },
+    2: { countries: ['アメリカ'], genres: ['ドラマ'] },
+  }
+  const noWait = () => Promise.resolve()
+  const quiet = { log: () => {}, warn: () => {} }
+  const okPage = { ok: true, status: 200, text: () => Promise.resolve(PAGE) }
+  const parsedPage = { countries: ['アメリカ', 'イギリス'], genres: ['サスペンス', 'アクション'] }
+
+  it('--all で取得に失敗した作品は、元の製作国・ジャンルを残して失敗件数に数える', async () => {
+    const fetchPage = vi.fn(async (url) => {
+      if (url.endsWith('/1')) return { ok: false, status: 500, text: () => Promise.resolve('') }
+      if (url.endsWith('/2')) throw new Error('socket hang up')
+      return okPage
+    })
+
+    const { movies, failed } = await collectMovieMeta({ ids: ['1', '2', '3'], previous, refetchAll: true, fetchPage, wait: noWait, logger: quiet })
+
+    expect(failed).toBe(2)
+    expect(movies).toEqual({ 1: previous[1], 2: previous[2], 3: parsedPage })
+  })
+
+  it('--all で取得できた作品は新しい値で置き換える', async () => {
+    const { movies, failed } = await collectMovieMeta({ ids: ['1'], previous, refetchAll: true, fetchPage: async () => okPage, wait: noWait, logger: quiet })
+
+    expect(failed).toBe(0)
+    expect(movies).toEqual({ 1: parsedPage })
+  })
+
+  it('--all なしでは取っていない作品だけを取りに行き、失敗したら保存しない（次の実行でもう一度取りに行く）', async () => {
+    const fetchPage = vi.fn(async () => ({ ok: false, status: 429, text: () => Promise.resolve('') }))
+
+    const { movies, failed } = await collectMovieMeta({ ids: ['1', '9'], previous, refetchAll: false, fetchPage, wait: noWait, logger: quiet })
+
+    expect(fetchPage).toHaveBeenCalledTimes(1)
+    expect(fetchPage).toHaveBeenCalledWith('https://filmarks.com/movies/9')
+    expect(failed).toBe(1)
+    expect(movies).toEqual(previous)
   })
 })
 
