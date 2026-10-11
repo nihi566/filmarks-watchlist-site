@@ -31,29 +31,41 @@ async function readJson(url, fallback) {
   }
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// ids の作品の製作国・ジャンルを取りに行き、previous（前回の movie-meta.json の movies）と合わせて返す。
+// refetchAll でなければ previous に無い作品だけを取りに行く。fetchPage / wait / logger はテストで差し替える
+export async function collectMovieMeta({ ids, previous = {}, refetchAll, fetchPage = fetch, wait = () => sleep(INTERVAL_MS), logger = console }) {
+  const movies = refetchAll ? {} : { ...previous }
+  const targets = ids.filter((id) => !(id in movies))
+  logger.log(`作品 ${ids.length} 件のうち ${targets.length} 件を取得します`)
+
+  let failed = 0
+  for (const [index, id] of targets.entries()) {
+    if (index > 0) await wait()
+    try {
+      const res = await fetchPage(`https://filmarks.com/movies/${id}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      movies[id] = parseMovieMeta(await res.text())
+      logger.log(`${index + 1}/${targets.length} ${id}: ${movies[id].countries.join('・') || '製作国不明'} / ${movies[id].genres.join('・') || 'ジャンル不明'}`)
+    } catch (err) {
+      // 取れなかった作品は前回の値があればそのまま残す（--all で取り直すときに消さない）。
+      // 前回の値も無ければ保存しない（次に実行したときにもう一度取りに行く）
+      failed += 1
+      const kept = id in previous
+      if (kept) movies[id] = previous[id]
+      logger.warn(`${index + 1}/${targets.length} ${id}: 取得できませんでした（${err.message}）${kept ? '。前回の値を残します' : ''}`)
+    }
+  }
+  return { movies, failed }
+}
+
 async function main() {
   const refetchAll = process.argv.includes('--all')
   const watchlist = await readJson(WATCHLIST, { tabs: [] })
   const meta = await readJson(META, { movies: {} })
-  const movies = refetchAll ? {} : { ...meta.movies }
   const ids = [...new Set(watchlist.tabs.flatMap((tab) => tab.movies.map((movie) => String(movie.movie_id))))]
-  const missing = ids.filter((id) => !(id in movies))
-  console.log(`作品 ${ids.length} 件のうち ${missing.length} 件を取得します`)
-
-  let failed = 0
-  for (const [index, id] of missing.entries()) {
-    if (index > 0) await new Promise((resolve) => setTimeout(resolve, INTERVAL_MS))
-    try {
-      const res = await fetch(`https://filmarks.com/movies/${id}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      movies[id] = parseMovieMeta(await res.text())
-      console.log(`${index + 1}/${missing.length} ${id}: ${movies[id].countries.join('・') || '製作国不明'} / ${movies[id].genres.join('・') || 'ジャンル不明'}`)
-    } catch (err) {
-      // 取れなかった作品は保存しない（次に実行したときにもう一度取りに行く）
-      failed += 1
-      console.warn(`${index + 1}/${missing.length} ${id}: 取得できませんでした（${err.message}）`)
-    }
-  }
+  const { movies, failed } = await collectMovieMeta({ ids, previous: meta.movies, refetchAll })
 
   const sorted = Object.fromEntries(Object.entries(movies).sort(([a], [b]) => Number(a) - Number(b)))
   await writeFile(META, `${JSON.stringify({ movies: sorted }, null, 2)}\n`)
