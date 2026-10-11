@@ -1,6 +1,7 @@
 // ウォッチリストの作品の製作国・ジャンルを Filmarks の作品ページから取り、public/movie-meta.json に保存する。
 // サイトはこれで作品の種類（アニメ・邦画・洋画）を決める。watchlist.json は scraper が作り直すので別のファイルに持つ。
 // 使い方: npm run meta（まだ取っていない作品だけを 1 秒に 1 件ずつ取りに行く。--all で全件取り直す）
+//         npm run meta:check（取りに行かず、足りない作品があれば ID を出して終了コード 1 で終わる。CI で使う）
 import { realpathSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -29,6 +30,24 @@ async function readJson(url, fallback) {
     if (err.code === 'ENOENT') return fallback
     throw err
   }
+}
+
+const watchlistIds = (watchlist) => [...new Set(watchlist.tabs.flatMap((tab) => tab.movies.map((movie) => String(movie.movie_id))))]
+
+// ウォッチリストの作品のうち、movies（movie-meta.json の movies）にまだ無いものの ID
+export function findMissingMetaIds(watchlist, movies) {
+  return watchlistIds(watchlist).filter((id) => !(id in movies))
+}
+
+function reportMissing(missing) {
+  if (missing.length === 0) {
+    console.log('ウォッチリストの作品はすべて public/movie-meta.json にあります')
+    return
+  }
+  const message = `public/movie-meta.json に無い作品が ${missing.length} 件あります（種類の絞り込みから漏れます）: ${missing.join(', ')}。npm run meta で取得してください`
+  // GitHub Actions では実行結果の画面に警告として出す
+  console.log(process.env.GITHUB_ACTIONS ? `::warning title=種類情報の不足::${message}` : message)
+  process.exitCode = 1
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -64,8 +83,11 @@ async function main() {
   const refetchAll = process.argv.includes('--all')
   const watchlist = await readJson(WATCHLIST, { tabs: [] })
   const meta = await readJson(META, { movies: {} })
-  const ids = [...new Set(watchlist.tabs.flatMap((tab) => tab.movies.map((movie) => String(movie.movie_id))))]
-  const { movies, failed } = await collectMovieMeta({ ids, previous: meta.movies, refetchAll })
+  if (process.argv.includes('--check')) {
+    reportMissing(findMissingMetaIds(watchlist, meta.movies))
+    return
+  }
+  const { movies, failed } = await collectMovieMeta({ ids: watchlistIds(watchlist), previous: meta.movies, refetchAll })
 
   const sorted = Object.fromEntries(Object.entries(movies).sort(([a], [b]) => Number(a) - Number(b)))
   await writeFile(META, `${JSON.stringify({ movies: sorted }, null, 2)}\n`)
