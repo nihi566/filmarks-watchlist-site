@@ -22,6 +22,17 @@
       "kind": "foreign",
       "episodes": null,
       "episode_minutes": null
+    },
+    "115241": {
+      "title": "国宝",
+      "image": "https://d2ueuvlup6lbue.cloudfront.net/variants/production/store/fitpad/300/420/e4ji5oeqsrg2tnx3e68xo56ud4pi/_.jpg",
+      "watched_on": "2026-10-12",
+      "minutes": 175,
+      "updated_at": "2026-10-12T03:39:00.609Z",
+      "rating": 2,
+      "kind": "japanese",
+      "episodes": null,
+      "episode_minutes": null
     }
   }
 }
